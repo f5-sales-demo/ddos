@@ -1,0 +1,200 @@
+---
+title: 토폴로지 및 워크시트
+description: GRE 터널 구성을 위한 네트워크 토폴로지 다이어그램 및 IP 주소 워크시트.
+sidebar:
+  order: 3
+i18n:
+  sourceHash: 6078064a06be
+  translator: machine
+---
+
+## 토폴로지 및 주소
+
+Cloud 스크러빙 센터에 연결하는
+**xDC_NAMEx** 데이터 센터 구성입니다.
+
+:::note
+**이것은 예시 값입니다.** 위의 표를 사용하여 고객별 및
+SOC 제공 값으로 교체하십시오.
+
+보호 대상 프리픽스는 **공개적으로 라우팅 가능해야 합니다** (비-RFC 1918).
+터널이 공용 인터넷을 경유하는 경우 GRE 외부 엔드포인트 IP도 공개적으로
+라우팅 가능해야 합니다. 사설 연결(L2, 프라이빗 피어링)의 경우
+RFC 1918 엔드포인트를 허용할 수 있습니다. 적절한 문서
+주소를 사용하는 예시는
+[K000147949](https://my.f5.com/manage/s/article/K000147949)를 참조하십시오.
+
+이중화를 위해 **BIG-IP 장치당 2개의 터널**을 서로 다른
+지리적 위치의 스크러빙 센터에 생성합니다 (HA 쌍의 경우 총 4개 터널).
+:::
+
+```mermaid
+flowchart LR
+    INET["Internet<br/>Inbound Traffic"]
+
+    subgraph XC["F5 Distributed Cloud"]
+        C1["xCENTER_1x Scrubbing<br/>xXC_C1_OUTER_V4x"]
+        C2["xCENTER_2x Scrubbing<br/>xXC_C2_OUTER_V4x"]
+    end
+
+    subgraph DC["xDC_NAMEx Data Center"]
+        BIGIPA["BIG-IP-A<br/>xBIGIP_A_OUTER_V4x"]
+        BIGIPB["BIG-IP-B<br/>xBIGIP_B_OUTER_V4x"]
+        NET["DDoS-Protected Network<br/>xPROTECTED_PREFIX_V4x<br/>xPROTECTED_PREFIX_V6x<br/><i>Your public IP block</i>"]
+    end
+
+    INET --> C1
+    INET --> C2
+    C1 -- "GRE C1-T1" --> BIGIPA
+    C2 -- "GRE C2-T1" --> BIGIPA
+    C1 -- "GRE C1-T2" --> BIGIPB
+    C2 -- "GRE C2-T2" --> BIGIPB
+    BIGIPA --> NET
+    BIGIPB --> NET
+
+    style NET fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+```
+
+## 워크시트
+
+터널 구성을 작성할 때 다음 XC 및 BIG-IP 워크시트를 참조하십시오.
+
+### XC
+
+**터널 C1-T1 — Center 1에서 BIG-IP-A:**
+
+- GRE 외부 IP (터널 엔드포인트용):
+    - IPv4 SRC: `xXC_C1_OUTER_V4x/24`
+    - IPv4 DST: `xBIGIP_A_OUTER_V4x/24`
+    - IPv6 SRC: `xXC_C1_OUTER_V6x/64`
+    - IPv6 DST: `xBIGIP_A_OUTER_V6x/64`
+
+- GRE 내부 IP (BGP 세션용):
+    - IPv4: `xXC_C1_T1_INNER_V4x/30`
+    - IPv6: `xXC_C1_T1_INNER_V6x/64`
+
+**터널 C1-T2 — Center 1에서 BIG-IP-B:**
+
+- GRE 외부 IP (터널 엔드포인트용):
+    - IPv4 SRC: `xXC_C1_OUTER_V4x/24`
+    - IPv4 DST: `xBIGIP_B_OUTER_V4x/24`
+    - IPv6 SRC: `xXC_C1_OUTER_V6x/64`
+    - IPv6 DST: `xBIGIP_B_OUTER_V6x/64`
+
+- GRE 내부 IP (BGP 세션용):
+    - IPv4: `xXC_C1_T2_INNER_V4x/30`
+    - IPv6: `xXC_C1_T2_INNER_V6x/64`
+
+**터널 C2-T1 — Center 2에서 BIG-IP-A:**
+
+- GRE 외부 IP (터널 엔드포인트용):
+    - IPv4 SRC: `xXC_C2_OUTER_V4x/24`
+    - IPv4 DST: `xBIGIP_A_OUTER_V4x/24`
+    - IPv6 SRC: `xXC_C2_OUTER_V6x/64`
+    - IPv6 DST: `xBIGIP_A_OUTER_V6x/64`
+
+- GRE 내부 IP (BGP 세션용):
+    - IPv4: `xXC_C2_T1_INNER_V4x/30`
+    - IPv6: `xXC_C2_T1_INNER_V6x/64`
+
+**터널 C2-T2 — Center 2에서 BIG-IP-B:**
+
+- GRE 외부 IP (터널 엔드포인트용):
+    - IPv4 SRC: `xXC_C2_OUTER_V4x/24`
+    - IPv4 DST: `xBIGIP_B_OUTER_V4x/24`
+    - IPv6 SRC: `xXC_C2_OUTER_V6x/64`
+    - IPv6 DST: `xBIGIP_B_OUTER_V6x/64`
+
+- GRE 내부 IP (BGP 세션용):
+    - IPv4: `xXC_C2_T2_INNER_V4x/30`
+    - IPv6: `xXC_C2_T2_INNER_V6x/64`
+
+:::note[내부 (트랜짓) IP]
+`10.10.10.0/30`과 같은 내부 IP는 RFC 1918 주소를 사용합니다. 이는
+GRE 터널 내부에 캡슐화되어 공용 인터넷에 노출되지 않으므로
+올바른 구성입니다. 보호 대상 프리픽스는 항상 공개적으로
+라우팅 가능해야 하며, 터널이 공용 인터넷을 경유하는 경우
+외부 엔드포인트 IP도 공개적으로 라우팅 가능해야 합니다.
+:::
+
+:::note[IPv6 내부 링크]
+여기서 IPv6 내부 링크는 일반적인 Cloud 기본 설정에 맞추기 위해
+/64 프리픽스를 사용합니다. 포인트-투-포인트 링크의 경우,
+이웃 탐색(neighbor-discovery) 고갈을 방지하기 위해
+[RFC 6164](https://datatracker.ietf.org/doc/html/rfc6164)에 따라 /127이 권장됩니다.
+SOC 터널 할당에서 지원하는 경우 /127을 사용하십시오.
+:::
+
+### BIG-IP
+
+**BIG-IP-A** (외부 IP `xBIGIP_A_OUTER_V4x` / `xBIGIP_A_OUTER_V6x`):
+
+- GRE 외부 IP:
+    - IPv4 SRC: `xBIGIP_A_OUTER_V4x/24`
+    - IPv4 DST (Center 1): `xXC_C1_OUTER_V4x/24`
+    - IPv4 DST (Center 2): `xXC_C2_OUTER_V4x/24`
+    - IPv6 SRC: `xBIGIP_A_OUTER_V6x/64`
+    - IPv6 DST (Center 1): `xXC_C1_OUTER_V6x/64`
+    - IPv6 DST (Center 2): `xXC_C2_OUTER_V6x/64`
+
+- GRE 내부 IP — 터널 C1-T1:
+    - IPv4: `xBIGIP_C1_T1_INNER_V4x/30`
+    - IPv6: `xBIGIP_C1_T1_INNER_V6x/64`
+
+- GRE 내부 IP — 터널 C2-T1:
+    - IPv4: `xBIGIP_C2_T1_INNER_V4x/30`
+    - IPv6: `xBIGIP_C2_T1_INNER_V6x/64`
+
+**BIG-IP-B** (외부 IP `xBIGIP_B_OUTER_V4x` / `xBIGIP_B_OUTER_V6x`):
+
+- GRE 외부 IP:
+    - IPv4 SRC: `xBIGIP_B_OUTER_V4x/24`
+    - IPv4 DST (Center 1): `xXC_C1_OUTER_V4x/24`
+    - IPv4 DST (Center 2): `xXC_C2_OUTER_V4x/24`
+    - IPv6 SRC: `xBIGIP_B_OUTER_V6x/64`
+    - IPv6 DST (Center 1): `xXC_C1_OUTER_V6x/64`
+    - IPv6 DST (Center 2): `xXC_C2_OUTER_V6x/64`
+
+- GRE 내부 IP — 터널 C1-T2:
+    - IPv4: `xBIGIP_C1_T2_INNER_V4x/30`
+    - IPv6: `xBIGIP_C1_T2_INNER_V6x/64`
+
+- GRE 내부 IP — 터널 C2-T2:
+    - IPv4: `xBIGIP_C2_T2_INNER_V4x/30`
+    - IPv6: `xBIGIP_C2_T2_INNER_V6x/64`
+
+- 보호 대상 프리픽스 (Cloud로 광고):
+    - IPv4: `xPROTECTED_NET_V4xxPROTECTED_CIDR_V4x`
+    - IPv6: `xPROTECTED_PREFIX_V6x`
+
+### 상세 토폴로지 다이어그램
+
+```mermaid
+flowchart LR
+    subgraph XC["F5 Distributed Cloud"]
+        C1["xCENTER_1x<br/>xXC_C1_OUTER_V4x<br/>xXC_C1_OUTER_V6x"]
+        C2["xCENTER_2x<br/>xXC_C2_OUTER_V4x<br/>xXC_C2_OUTER_V6x"]
+    end
+
+    subgraph DC["xDC_NAMEx Data Center"]
+        subgraph BIGIPA["BIG-IP-A<br/>xBIGIP_A_OUTER_V4x<br/>xBIGIP_A_OUTER_V6x"]
+            T1_INNER["C1-T1 Inner<br/>xBIGIP_C1_T1_INNER_V4x<br/>xBIGIP_C1_T1_INNER_V6x"]
+            T2_INNER["C2-T1 Inner<br/>xBIGIP_C2_T1_INNER_V4x<br/>xBIGIP_C2_T1_INNER_V6x"]
+        end
+
+        subgraph BIGIPB["BIG-IP-B<br/>xBIGIP_B_OUTER_V4x<br/>xBIGIP_B_OUTER_V6x"]
+            T3_INNER["C1-T2 Inner<br/>xBIGIP_C1_T2_INNER_V4x<br/>xBIGIP_C1_T2_INNER_V6x"]
+            T4_INNER["C2-T2 Inner<br/>xBIGIP_C2_T2_INNER_V4x<br/>xBIGIP_C2_T2_INNER_V6x"]
+        end
+    end
+
+    C1 == "GRE C1-T1" ==> T1_INNER
+    C2 == "GRE C2-T1" ==> T2_INNER
+    C1 == "GRE C1-T2" ==> T3_INNER
+    C2 == "GRE C2-T2" ==> T4_INNER
+
+    C1 -. "BGP tcp/179<br/>xXC_C1_T1_INNER_V4x → xBIGIP_C1_T1_INNER_V4x" .-> T1_INNER
+    C2 -. "BGP tcp/179<br/>xXC_C2_T1_INNER_V4x → xBIGIP_C2_T1_INNER_V4x" .-> T2_INNER
+    C1 -. "BGP tcp/179<br/>xXC_C1_T2_INNER_V4x → xBIGIP_C1_T2_INNER_V4x" .-> T3_INNER
+    C2 -. "BGP tcp/179<br/>xXC_C2_T2_INNER_V4x → xBIGIP_C2_T2_INNER_V4x" .-> T4_INNER
+```

@@ -1,0 +1,29 @@
+---
+title: Geschütztes Präfix
+description: >-
+  Anforderungen an den öffentlichen IP-Adressblock, den Cloud gegen
+  DDoS-Angriffe verteidigt.
+sidebar:
+  order: 2
+i18n:
+  sourceHash: feee5198d63d
+  translator: machine
+---
+
+## Geschütztes Präfix (öffentliche IP)
+
+Das **geschützte Präfix** ist der öffentliche IP-Adressblock Ihrer Organisation, den
+Cloud gegen DDoS-Angriffe verteidigt.
+
+| Anforderung | IPv4 | IPv6 |
+|-------------|------|------|
+| **Mindestgröße** | /24 (256 IPs) | /48 |
+| **Routbarkeit** | Öffentlich routbar (nicht RFC 1918) | Global Unicast (nicht ULA) |
+| **Registrierung** | RIR-zugewiesen (ARIN, RIPE, APNIC) | RIR-zugewiesen |
+| **Nachweis** | LOA oder IRR/ROA-Registrierung | LOA oder IRR/ROA-Registrierung |
+
+**Verkehrsfluss:**
+
+1. Cloud kündigt Ihr Präfix global über BGP Anycast an
+1. Der gesamte Internetverkehr, der für Ihre IPs bestimmt ist, wird über Scrubbing-Center geleitet
+1. Angriffsverkehr wird verworfen; sauberer Verkehr wird über GRE-Tunnel zugestellt

@@ -1,0 +1,93 @@
+---
+title: Configuração na Nuvem
+description: >-
+  Configure túneis, ASNs e rotas no Console da Nuvem para mitigação de DDoS
+  roteado.
+sidebar:
+  order: 4
+i18n:
+  sourceHash: 606c77582a14
+  translator: machine
+---
+
+## XC (UI)
+
+Use a interface web para configurar o lado da **Nuvem**, com base no guia de [Mitigação de DDoS Roteado L3/L4](https://docs.cloud.f5.com/docs-v2/ddos-and-transit-services/how-tos/network-firewall/l3l4-ddos-mitigation).
+
+### Habilitar o workspace de DDoS
+
+Antes de configurar túneis e BGP:
+
+1. Entre em contato com a equipe da Nuvem (via `sales@example.com`
+   ou sua equipe de contas) para:
+    - Habilitar o workspace de **Mitigação de DDoS Roteado** para o seu tenant.
+    - Fornecer:
+        - Seus **blocos de IP públicos** (/24 ou menor para IPv4, /48 ou
+          menor para IPv6) e comprovação de propriedade (ou LOA).
+        - Seu **ASN** (deve ser emitido pelo ARIN ou registro equivalente).
+        - Registro **IRR** (RIPE, ARIN, APNIC, etc.) e **ROA** no
+          repositório RPKI.
+        - **Método de retorno de tráfego limpo** desejado (túneis GRE, Camada 2,
+          peering privado via Equinix, etc.).
+        - Localizações dos data centers e roteadores a proteger.
+        - **AS-Path prepends** necessários para anúncios de rotas.
+        - Quaisquer **comunidades BGP**, preferências de rotas ou **AS-SET**
+
+1. O SOC provisionará:
+    - Túneis
+    - ASNs
+    - Prefixos protegidos
+    - Opções de anúncio de rotas
+    - Fast ACLs / políticas de firewall, conforme necessário
+
+### Túneis
+
+1. Faça login no [Console da Nuvem](https://docs.cloud.f5.com/docs-v2/ddos-and-transit-services/how-tos/network-firewall/l3l4-ddos-mitigation) e
+   selecione **Routed DDoS** no seletor de serviços.
+1. Vá para **Manage > Tunnels > Add Tunnel** e configure:
+    - **Location Name** e **Availability Zone** (Zona 1 por padrão).
+    - **Bandwidth Max in MB**.
+    - **Tunnel Type**:
+        - **GRE Over IPv4** para túnel externo IPv4.
+        - **GRE Over IPv6** para túnel externo IPv6.
+        - **IP Over IP** para encapsulamento IPv4-em-IPv4.
+        - **IPv6 Over IPv6** para encapsulamento IPv6-em-IPv6.
+    - **Customer Endpoint IP**: endereço externo do BIG-IP (self IP
+      externo, deve ser roteável publicamente quando os túneis atravessam
+      a Internet pública).
+    - Opcional: interconexão IPv4/IPv6, fragmentação, keepalive (todos
+      desabilitados por padrão).
+1. Em **Tunnel BGP Information**:
+    - Selecione um **objeto ASN** (seu ASN).
+    - Defina **Customer Peer Secret Override**: Use Default Secret
+      (padrão), BGP Password Override (ofuscado ou texto limpo) ou
+      No Secret.
+    - Defina o valor do **Holddown Timer** em segundos, se diferente do
+      padrão.
+
+O SOC pode pré-criar esses objetos de túnel para você; basta combinar
+os **IPs de endpoint** e as configurações BGP no BIG-IP.
+
+### ASNs e Rotas
+
+- **ASNs**: -> **Manage > ASNs > Add ASN**.
+    - Insira seu ASN e certifique-se de que o BGP está habilitado.
+
+- **Prefixos**: -> **Manage > Prefixes > Add Prefix**.
+    - Insira cada prefixo IP e associe-o ao seu ASN.
+
+- **Anúncios de Rota** -> **Manage > Route Advertisement > Add Route Advertisement**.
+    - Insira o prefixo, escolha **Active** ou **Not Advertised** e
+      expiração opcional.
+
+Esses objetos controlam quais prefixos são anunciados pela rede global
+quando o serviço está ativo.
+
+### Restrição de Rede
+
+**Firewall Rules**, **Deny List Rules** e **Fast ACLs for Internet
+VIPs** permitem que você:
+
+- Bloqueie ou permita tráfego específico.
+- Limite a taxa de fontes abusivas.
+- Aplique proteções adicionais contra DDoS além da simples limpeza volumétrica.

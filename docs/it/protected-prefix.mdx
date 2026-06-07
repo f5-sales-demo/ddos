@@ -1,0 +1,29 @@
+---
+title: Prefisso protetto
+description: >-
+  Requisiti per il blocco di indirizzi IP pubblici che Cloud difende dagli
+  attacchi DDoS.
+sidebar:
+  order: 2
+i18n:
+  sourceHash: feee5198d63d
+  translator: machine
+---
+
+## Prefisso protetto (IP pubblico)
+
+Il **prefisso protetto** è il blocco di indirizzi IP pubblici della vostra organizzazione che
+Cloud difende dagli attacchi DDoS.
+
+| Requisito | IPv4 | IPv6 |
+|-------------|------|------|
+| **Dimensione minima** | /24 (256 IP) | /48 |
+| **Instradabilità** | Instradabile pubblicamente (non RFC 1918) | Unicast globale (non ULA) |
+| **Registrazione** | Assegnato da RIR (ARIN, RIPE, APNIC) | Assegnato da RIR |
+| **Prova** | LOA o registrazione IRR/ROA | LOA o registrazione IRR/ROA |
+
+**Flusso del traffico:**
+
+1. Cloud annuncia il vostro prefisso globalmente tramite BGP anycast
+1. Tutto il traffico Internet destinato ai vostri IP viene instradato attraverso i centri di scrubbing
+1. Il traffico di attacco viene scartato; il traffico pulito viene consegnato tramite tunnel GRE

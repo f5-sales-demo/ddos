@@ -1,0 +1,185 @@
+---
+title: トポロジーとワークシート
+description: GREトンネル設定のためのネットワークトポロジー図とIPアドレスワークシート。
+sidebar:
+  order: 3
+i18n:
+  sourceHash: 6078064a06be
+  translator: machine
+---
+
+## トポロジーとアドレス
+
+Cloudスクラビングセンターに接続する **xDC_NAMEx** データセンターの設定。
+
+:::note
+**これらは例示値です。** 上記の表を使用して、お客様固有の値およびSOCから提供された値に置き換えてください。
+
+保護対象プレフィックスは**パブリックにルーティング可能**（非RFC 1918）である必要があります。
+トンネルがパブリックインターネットを経由する場合、GREアウターエンドポイントIPもパブリックにルーティング可能である必要があります。プライベート接続（L2、プライベートピアリング）ではRFC 1918エンドポイントが使用可能な場合があります。適切なドキュメントアドレスを使用した例については、[K000147949](https://my.f5.com/manage/s/article/K000147949) を参照してください。
+
+冗長性のために、異なる地理的位置のスクラビングセンターに対して **BIG-IPユニットごとに2つのトンネル** を作成してください（HAペアの場合、合計4トンネル）。
+:::
+
+```mermaid
+flowchart LR
+    INET["Internet<br/>Inbound Traffic"]
+
+    subgraph XC["F5 Distributed Cloud"]
+        C1["xCENTER_1x Scrubbing<br/>xXC_C1_OUTER_V4x"]
+        C2["xCENTER_2x Scrubbing<br/>xXC_C2_OUTER_V4x"]
+    end
+
+    subgraph DC["xDC_NAMEx Data Center"]
+        BIGIPA["BIG-IP-A<br/>xBIGIP_A_OUTER_V4x"]
+        BIGIPB["BIG-IP-B<br/>xBIGIP_B_OUTER_V4x"]
+        NET["DDoS-Protected Network<br/>xPROTECTED_PREFIX_V4x<br/>xPROTECTED_PREFIX_V6x<br/><i>Your public IP block</i>"]
+    end
+
+    INET --> C1
+    INET --> C2
+    C1 -- "GRE C1-T1" --> BIGIPA
+    C2 -- "GRE C2-T1" --> BIGIPA
+    C1 -- "GRE C1-T2" --> BIGIPB
+    C2 -- "GRE C2-T2" --> BIGIPB
+    BIGIPA --> NET
+    BIGIPB --> NET
+
+    style NET fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+```
+
+## ワークシート
+
+トンネル設定を構築する際の参考として、以下のXCおよびBIG-IPワークシートを使用してください。
+
+### XC
+
+**トンネル C1-T1 — センター1からBIG-IP-A:**
+
+- GREアウターIP（トンネルエンドポイント用）:
+    - IPv4 SRC: `xXC_C1_OUTER_V4x/24`
+    - IPv4 DST: `xBIGIP_A_OUTER_V4x/24`
+    - IPv6 SRC: `xXC_C1_OUTER_V6x/64`
+    - IPv6 DST: `xBIGIP_A_OUTER_V6x/64`
+
+- GREインナーIP（BGPセッション用）:
+    - IPv4: `xXC_C1_T1_INNER_V4x/30`
+    - IPv6: `xXC_C1_T1_INNER_V6x/64`
+
+**トンネル C1-T2 — センター1からBIG-IP-B:**
+
+- GREアウターIP（トンネルエンドポイント用）:
+    - IPv4 SRC: `xXC_C1_OUTER_V4x/24`
+    - IPv4 DST: `xBIGIP_B_OUTER_V4x/24`
+    - IPv6 SRC: `xXC_C1_OUTER_V6x/64`
+    - IPv6 DST: `xBIGIP_B_OUTER_V6x/64`
+
+- GREインナーIP（BGPセッション用）:
+    - IPv4: `xXC_C1_T2_INNER_V4x/30`
+    - IPv6: `xXC_C1_T2_INNER_V6x/64`
+
+**トンネル C2-T1 — センター2からBIG-IP-A:**
+
+- GREアウターIP（トンネルエンドポイント用）:
+    - IPv4 SRC: `xXC_C2_OUTER_V4x/24`
+    - IPv4 DST: `xBIGIP_A_OUTER_V4x/24`
+    - IPv6 SRC: `xXC_C2_OUTER_V6x/64`
+    - IPv6 DST: `xBIGIP_A_OUTER_V6x/64`
+
+- GREインナーIP（BGPセッション用）:
+    - IPv4: `xXC_C2_T1_INNER_V4x/30`
+    - IPv6: `xXC_C2_T1_INNER_V6x/64`
+
+**トンネル C2-T2 — センター2からBIG-IP-B:**
+
+- GREアウターIP（トンネルエンドポイント用）:
+    - IPv4 SRC: `xXC_C2_OUTER_V4x/24`
+    - IPv4 DST: `xBIGIP_B_OUTER_V4x/24`
+    - IPv6 SRC: `xXC_C2_OUTER_V6x/64`
+    - IPv6 DST: `xBIGIP_B_OUTER_V6x/64`
+
+- GREインナーIP（BGPセッション用）:
+    - IPv4: `xXC_C2_T2_INNER_V4x/30`
+    - IPv6: `xXC_C2_T2_INNER_V6x/64`
+
+:::note[インナー（トランジット）IP]
+`10.10.10.0/30` などのインナーIPはRFC 1918アドレスを使用します。これはGREトンネル内にカプセル化され、パブリックインターネット上に出現しないため、正しい設定です。保護対象プレフィックスは常にパブリックにルーティング可能である必要があります。アウターエンドポイントIPは、トンネルがパブリックインターネットを経由する場合、パブリックにルーティング可能である必要があります。
+:::
+
+:::note[IPv6インナーリンク]
+ここではIPv6インナーリンクに/64プレフィックスを使用しており、一般的なCloudのデフォルトに合わせています。ポイントツーポイントリンクでは、近隣探索の枯渇を回避するために [RFC 6164](https://datatracker.ietf.org/doc/html/rfc6164) に従い/127が推奨されます。SOCのトンネル割り当てがサポートしている場合は/127を使用してください。
+:::
+
+### BIG-IP
+
+**BIG-IP-A**（アウターIP `xBIGIP_A_OUTER_V4x` / `xBIGIP_A_OUTER_V6x`）:
+
+- GREアウターIP:
+    - IPv4 SRC: `xBIGIP_A_OUTER_V4x/24`
+    - IPv4 DST（センター1）: `xXC_C1_OUTER_V4x/24`
+    - IPv4 DST（センター2）: `xXC_C2_OUTER_V4x/24`
+    - IPv6 SRC: `xBIGIP_A_OUTER_V6x/64`
+    - IPv6 DST（センター1）: `xXC_C1_OUTER_V6x/64`
+    - IPv6 DST（センター2）: `xXC_C2_OUTER_V6x/64`
+
+- GREインナーIP — トンネル C1-T1:
+    - IPv4: `xBIGIP_C1_T1_INNER_V4x/30`
+    - IPv6: `xBIGIP_C1_T1_INNER_V6x/64`
+
+- GREインナーIP — トンネル C2-T1:
+    - IPv4: `xBIGIP_C2_T1_INNER_V4x/30`
+    - IPv6: `xBIGIP_C2_T1_INNER_V6x/64`
+
+**BIG-IP-B**（アウターIP `xBIGIP_B_OUTER_V4x` / `xBIGIP_B_OUTER_V6x`）:
+
+- GREアウターIP:
+    - IPv4 SRC: `xBIGIP_B_OUTER_V4x/24`
+    - IPv4 DST（センター1）: `xXC_C1_OUTER_V4x/24`
+    - IPv4 DST（センター2）: `xXC_C2_OUTER_V4x/24`
+    - IPv6 SRC: `xBIGIP_B_OUTER_V6x/64`
+    - IPv6 DST（センター1）: `xXC_C1_OUTER_V6x/64`
+    - IPv6 DST（センター2）: `xXC_C2_OUTER_V6x/64`
+
+- GREインナーIP — トンネル C1-T2:
+    - IPv4: `xBIGIP_C1_T2_INNER_V4x/30`
+    - IPv6: `xBIGIP_C1_T2_INNER_V6x/64`
+
+- GREインナーIP — トンネル C2-T2:
+    - IPv4: `xBIGIP_C2_T2_INNER_V4x/30`
+    - IPv6: `xBIGIP_C2_T2_INNER_V6x/64`
+
+- 保護対象プレフィックス（Cloudにアドバタイズ）:
+    - IPv4: `xPROTECTED_NET_V4xxPROTECTED_CIDR_V4x`
+    - IPv6: `xPROTECTED_PREFIX_V6x`
+
+### 詳細トポロジー図
+
+```mermaid
+flowchart LR
+    subgraph XC["F5 Distributed Cloud"]
+        C1["xCENTER_1x<br/>xXC_C1_OUTER_V4x<br/>xXC_C1_OUTER_V6x"]
+        C2["xCENTER_2x<br/>xXC_C2_OUTER_V4x<br/>xXC_C2_OUTER_V6x"]
+    end
+
+    subgraph DC["xDC_NAMEx Data Center"]
+        subgraph BIGIPA["BIG-IP-A<br/>xBIGIP_A_OUTER_V4x<br/>xBIGIP_A_OUTER_V6x"]
+            T1_INNER["C1-T1 Inner<br/>xBIGIP_C1_T1_INNER_V4x<br/>xBIGIP_C1_T1_INNER_V6x"]
+            T2_INNER["C2-T1 Inner<br/>xBIGIP_C2_T1_INNER_V4x<br/>xBIGIP_C2_T1_INNER_V6x"]
+        end
+
+        subgraph BIGIPB["BIG-IP-B<br/>xBIGIP_B_OUTER_V4x<br/>xBIGIP_B_OUTER_V6x"]
+            T3_INNER["C1-T2 Inner<br/>xBIGIP_C1_T2_INNER_V4x<br/>xBIGIP_C1_T2_INNER_V6x"]
+            T4_INNER["C2-T2 Inner<br/>xBIGIP_C2_T2_INNER_V4x<br/>xBIGIP_C2_T2_INNER_V6x"]
+        end
+    end
+
+    C1 == "GRE C1-T1" ==> T1_INNER
+    C2 == "GRE C2-T1" ==> T2_INNER
+    C1 == "GRE C1-T2" ==> T3_INNER
+    C2 == "GRE C2-T2" ==> T4_INNER
+
+    C1 -. "BGP tcp/179<br/>xXC_C1_T1_INNER_V4x → xBIGIP_C1_T1_INNER_V4x" .-> T1_INNER
+    C2 -. "BGP tcp/179<br/>xXC_C2_T1_INNER_V4x → xBIGIP_C2_T1_INNER_V4x" .-> T2_INNER
+    C1 -. "BGP tcp/179<br/>xXC_C1_T2_INNER_V4x → xBIGIP_C1_T2_INNER_V4x" .-> T3_INNER
+    C2 -. "BGP tcp/179<br/>xXC_C2_T2_INNER_V4x → xBIGIP_C2_T2_INNER_V4x" .-> T4_INNER
+```

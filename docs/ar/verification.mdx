@@ -1,0 +1,102 @@
+---
+title: Verification
+description: >-
+  التحقق من تكوين نفق GRE وتكوين BGP على BIG-IP، واستكشاف المشكلات الشائعة
+  وإصلاحها.
+sidebar:
+  order: 6
+i18n:
+  sourceHash: 696153ba9b9a
+  translator: machine
+---
+
+## التحقق
+
+### BIG-IP
+
+#### الأنفاق
+
+قم بالتشغيل على كل وحدة للأنفاق الخاصة بها:
+
+```shell title="tmsh"
+show net tunnels tunnel xc-ddos-c1t1-v4
+show net tunnels tunnel xc-ddos-c1t1-v6
+show net tunnels tunnel xc-ddos-c1t2-v4
+show net tunnels tunnel xc-ddos-c1t2-v6
+show net tunnels tunnel xc-ddos-c2t1-v4
+show net tunnels tunnel xc-ddos-c2t1-v6
+show net tunnels tunnel xc-ddos-c2t2-v4
+show net tunnels tunnel xc-ddos-c2t2-v6
+list net tunnels tunnel xc-ddos-c1t1-v4 all-properties
+```
+
+#### عناوين Self IP
+
+```shell title="tmsh"
+list net self xc-ddos-*
+```
+
+#### فحص المسار
+
+من كل وحدة:
+
+```shell title="tmsh"
+# BIG-IP-A tunnels
+ping xXC_C1_T1_INNER_V4x source xBIGIP_C1_T1_INNER_V4x
+ping xXC_C2_T1_INNER_V4x source xBIGIP_C2_T1_INNER_V4x
+
+# BIG-IP-B tunnels
+ping xXC_C1_T2_INNER_V4x source xBIGIP_C1_T2_INNER_V4x
+ping xXC_C2_T2_INNER_V4x source xBIGIP_C2_T2_INNER_V4x
+```
+
+#### BGP
+
+في imish على كل وحدة:
+
+```shell title="imish"
+show ip bgp summary
+show ipv6 bgp summary
+show ip bgp
+show ipv6 bgp
+
+# BIG-IP-A neighbors
+show ip bgp neighbors xXC_C1_T1_INNER_V4x
+show ip bgp neighbors xXC_C2_T1_INNER_V4x
+show ip bgp neighbors xXC_C1_T1_INNER_V4x advertised-routes
+show ip bgp neighbors xXC_C1_T1_INNER_V4x received-routes
+
+# BIG-IP-B neighbors
+show ip bgp neighbors xXC_C1_T2_INNER_V4x
+show ip bgp neighbors xXC_C2_T2_INNER_V4x
+show ip bgp neighbors xXC_C1_T2_INNER_V4x advertised-routes
+show ip bgp neighbors xXC_C1_T2_INNER_V4x received-routes
+
+show ip route
+show ipv6 route
+```
+
+:::caution[قائمة فحص استكشاف الأخطاء وإصلاحها]
+إذا لم يتم إنشاء اتصال BGP:
+
+1. تحقق من أن نفق GRE يعمل: يجب أن يُظهر `show net tunnels tunnel`
+   الحالة `up`.
+1. تأكد من أن `allow-service` يتضمن `tcp:179` على عنوان Self IP الداخلي.
+1. قم بعمل ping لعنوان IP الداخلي البعيد عبر النفق.
+1. تحقق من تطابق كلمة مرور BGP على كلا الجانبين (سبب شائع لأخطاء
+   `NOTIFICATION`).
+1. تحقق من تطبيق prefix-lists وroute-maps بشكل صحيح.
+1. تحقق من `show ip bgp neighbors <IP>` لمعرفة آخر سبب خطأ/إعادة
+   تعيين.
+1. على كل وحدة HA، تحقق من أن أنفاق الوحدة الخاصة بها تعمل وأن
+   جيران BGP الخاصين بها مُكوَّنون (وليس تلك الخاصة بالوحدة الأخرى).
+:::
+
+### وحدة تحكم XC
+
+انتقل إلى **DDoS and Transit Services >
+[DDoS Protection > Visibility](https://docs.cloud.f5.com/docs-v2/ddos-and-transit-services/how-tos/network-firewall/l3l4-ddos-mitigation)** لعرض:
+
+- حركة المرور حسب الشبكة والمنطقة والتطبيق.
+- حركة المرور المحظورة مقابل المسموح بها.
+- تفاصيل الهجمات وإجراءات التنقية.
