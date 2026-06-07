@@ -1,0 +1,186 @@
+---
+title: 拓撲與工作表
+description: GRE 通道配置的網路拓撲圖和 IP 位址工作表。
+sidebar:
+  order: 3
+i18n:
+  sourceHash: 6078064a06be
+  translator: machine
+---
+
+## 拓撲與位址
+
+**xDC_NAMEx** 資料中心連接至 Cloud 清洗中心的配置。
+
+:::note
+**以下為範例值。** 請使用上方表格中客戶專屬及 SOC 提供的值進行替換。
+
+受保護的前綴**必須是可公開路由的**（非 RFC 1918）。
+當通道經由公共網際網路傳輸時，GRE 外部端點 IP 也必須是可公開路由的；私有連線（L2、私有對等互連）可允許使用 RFC 1918 端點。請參閱
+[K000147949](https://my.f5.com/manage/s/article/K000147949) 以取得使用正確文件位址的範例。
+
+為實現冗餘，請為**每台 BIG-IP 設備建立 2 條通道**，分別連接至不同地理位置的清洗中心（HA 配對共 4 條通道）。
+:::
+
+```mermaid
+flowchart LR
+    INET["Internet<br/>Inbound Traffic"]
+
+    subgraph XC["F5 Distributed Cloud"]
+        C1["xCENTER_1x Scrubbing<br/>xXC_C1_OUTER_V4x"]
+        C2["xCENTER_2x Scrubbing<br/>xXC_C2_OUTER_V4x"]
+    end
+
+    subgraph DC["xDC_NAMEx Data Center"]
+        BIGIPA["BIG-IP-A<br/>xBIGIP_A_OUTER_V4x"]
+        BIGIPB["BIG-IP-B<br/>xBIGIP_B_OUTER_V4x"]
+        NET["DDoS-Protected Network<br/>xPROTECTED_PREFIX_V4x<br/>xPROTECTED_PREFIX_V6x<br/><i>Your public IP block</i>"]
+    end
+
+    INET --> C1
+    INET --> C2
+    C1 -- "GRE C1-T1" --> BIGIPA
+    C2 -- "GRE C2-T1" --> BIGIPA
+    C1 -- "GRE C1-T2" --> BIGIPB
+    C2 -- "GRE C2-T2" --> BIGIPB
+    BIGIPA --> NET
+    BIGIPB --> NET
+
+    style NET fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+```
+
+## 工作表
+
+在建立通道配置時，請參考以下 XC 和 BIG-IP 工作表。
+
+### XC
+
+**通道 C1-T1 — 中心 1 至 BIG-IP-A：**
+
+- GRE 外部 IP（用於通道端點）：
+    - IPv4 SRC：`xXC_C1_OUTER_V4x/24`
+    - IPv4 DST：`xBIGIP_A_OUTER_V4x/24`
+    - IPv6 SRC：`xXC_C1_OUTER_V6x/64`
+    - IPv6 DST：`xBIGIP_A_OUTER_V6x/64`
+
+- GRE 內部 IP（用於 BGP 工作階段）：
+    - IPv4：`xXC_C1_T1_INNER_V4x/30`
+    - IPv6：`xXC_C1_T1_INNER_V6x/64`
+
+**通道 C1-T2 — 中心 1 至 BIG-IP-B：**
+
+- GRE 外部 IP（用於通道端點）：
+    - IPv4 SRC：`xXC_C1_OUTER_V4x/24`
+    - IPv4 DST：`xBIGIP_B_OUTER_V4x/24`
+    - IPv6 SRC：`xXC_C1_OUTER_V6x/64`
+    - IPv6 DST：`xBIGIP_B_OUTER_V6x/64`
+
+- GRE 內部 IP（用於 BGP 工作階段）：
+    - IPv4：`xXC_C1_T2_INNER_V4x/30`
+    - IPv6：`xXC_C1_T2_INNER_V6x/64`
+
+**通道 C2-T1 — 中心 2 至 BIG-IP-A：**
+
+- GRE 外部 IP（用於通道端點）：
+    - IPv4 SRC：`xXC_C2_OUTER_V4x/24`
+    - IPv4 DST：`xBIGIP_A_OUTER_V4x/24`
+    - IPv6 SRC：`xXC_C2_OUTER_V6x/64`
+    - IPv6 DST：`xBIGIP_A_OUTER_V6x/64`
+
+- GRE 內部 IP（用於 BGP 工作階段）：
+    - IPv4：`xXC_C2_T1_INNER_V4x/30`
+    - IPv6：`xXC_C2_T1_INNER_V6x/64`
+
+**通道 C2-T2 — 中心 2 至 BIG-IP-B：**
+
+- GRE 外部 IP（用於通道端點）：
+    - IPv4 SRC：`xXC_C2_OUTER_V4x/24`
+    - IPv4 DST：`xBIGIP_B_OUTER_V4x/24`
+    - IPv6 SRC：`xXC_C2_OUTER_V6x/64`
+    - IPv6 DST：`xBIGIP_B_OUTER_V6x/64`
+
+- GRE 內部 IP（用於 BGP 工作階段）：
+    - IPv4：`xXC_C2_T2_INNER_V4x/30`
+    - IPv6：`xXC_C2_T2_INNER_V6x/64`
+
+:::note[內部（傳輸）IP]
+內部 IP（如 `10.10.10.0/30`）使用 RFC 1918 位址。這是正確的，因為它們被封裝在 GRE 通道內部，不會出現在公共網際網路上。受保護的前綴必須始終是可公開路由的；當通道經由公共網際網路傳輸時，外部端點 IP 必須是可公開路由的。
+:::
+
+:::note[IPv6 內部連結]
+此處 IPv6 內部連結使用 /64 前綴以匹配常見的 Cloud 預設值。對於點對點連結，根據 [RFC 6164](https://datatracker.ietf.org/doc/html/rfc6164) 建議使用 /127 以避免鄰居探索耗盡問題。如果 SOC 通道分配支援，請使用 /127。
+:::
+
+### BIG-IP
+
+**BIG-IP-A**（外部 IP `xBIGIP_A_OUTER_V4x` / `xBIGIP_A_OUTER_V6x`）：
+
+- GRE 外部 IP：
+    - IPv4 SRC：`xBIGIP_A_OUTER_V4x/24`
+    - IPv4 DST（中心 1）：`xXC_C1_OUTER_V4x/24`
+    - IPv4 DST（中心 2）：`xXC_C2_OUTER_V4x/24`
+    - IPv6 SRC：`xBIGIP_A_OUTER_V6x/64`
+    - IPv6 DST（中心 1）：`xXC_C1_OUTER_V6x/64`
+    - IPv6 DST（中心 2）：`xXC_C2_OUTER_V6x/64`
+
+- GRE 內部 IP — 通道 C1-T1：
+    - IPv4：`xBIGIP_C1_T1_INNER_V4x/30`
+    - IPv6：`xBIGIP_C1_T1_INNER_V6x/64`
+
+- GRE 內部 IP — 通道 C2-T1：
+    - IPv4：`xBIGIP_C2_T1_INNER_V4x/30`
+    - IPv6：`xBIGIP_C2_T1_INNER_V6x/64`
+
+**BIG-IP-B**（外部 IP `xBIGIP_B_OUTER_V4x` / `xBIGIP_B_OUTER_V6x`）：
+
+- GRE 外部 IP：
+    - IPv4 SRC：`xBIGIP_B_OUTER_V4x/24`
+    - IPv4 DST（中心 1）：`xXC_C1_OUTER_V4x/24`
+    - IPv4 DST（中心 2）：`xXC_C2_OUTER_V4x/24`
+    - IPv6 SRC：`xBIGIP_B_OUTER_V6x/64`
+    - IPv6 DST（中心 1）：`xXC_C1_OUTER_V6x/64`
+    - IPv6 DST（中心 2）：`xXC_C2_OUTER_V6x/64`
+
+- GRE 內部 IP — 通道 C1-T2：
+    - IPv4：`xBIGIP_C1_T2_INNER_V4x/30`
+    - IPv6：`xBIGIP_C1_T2_INNER_V6x/64`
+
+- GRE 內部 IP — 通道 C2-T2：
+    - IPv4：`xBIGIP_C2_T2_INNER_V4x/30`
+    - IPv6：`xBIGIP_C2_T2_INNER_V6x/64`
+
+- 受保護的前綴（向 Cloud 通告）：
+    - IPv4：`xPROTECTED_NET_V4xxPROTECTED_CIDR_V4x`
+    - IPv6：`xPROTECTED_PREFIX_V6x`
+
+### 詳細拓撲圖
+
+```mermaid
+flowchart LR
+    subgraph XC["F5 Distributed Cloud"]
+        C1["xCENTER_1x<br/>xXC_C1_OUTER_V4x<br/>xXC_C1_OUTER_V6x"]
+        C2["xCENTER_2x<br/>xXC_C2_OUTER_V4x<br/>xXC_C2_OUTER_V6x"]
+    end
+
+    subgraph DC["xDC_NAMEx Data Center"]
+        subgraph BIGIPA["BIG-IP-A<br/>xBIGIP_A_OUTER_V4x<br/>xBIGIP_A_OUTER_V6x"]
+            T1_INNER["C1-T1 Inner<br/>xBIGIP_C1_T1_INNER_V4x<br/>xBIGIP_C1_T1_INNER_V6x"]
+            T2_INNER["C2-T1 Inner<br/>xBIGIP_C2_T1_INNER_V4x<br/>xBIGIP_C2_T1_INNER_V6x"]
+        end
+
+        subgraph BIGIPB["BIG-IP-B<br/>xBIGIP_B_OUTER_V4x<br/>xBIGIP_B_OUTER_V6x"]
+            T3_INNER["C1-T2 Inner<br/>xBIGIP_C1_T2_INNER_V4x<br/>xBIGIP_C1_T2_INNER_V6x"]
+            T4_INNER["C2-T2 Inner<br/>xBIGIP_C2_T2_INNER_V4x<br/>xBIGIP_C2_T2_INNER_V6x"]
+        end
+    end
+
+    C1 == "GRE C1-T1" ==> T1_INNER
+    C2 == "GRE C2-T1" ==> T2_INNER
+    C1 == "GRE C1-T2" ==> T3_INNER
+    C2 == "GRE C2-T2" ==> T4_INNER
+
+    C1 -. "BGP tcp/179<br/>xXC_C1_T1_INNER_V4x → xBIGIP_C1_T1_INNER_V4x" .-> T1_INNER
+    C2 -. "BGP tcp/179<br/>xXC_C2_T1_INNER_V4x → xBIGIP_C2_T1_INNER_V4x" .-> T2_INNER
+    C1 -. "BGP tcp/179<br/>xXC_C1_T2_INNER_V4x → xBIGIP_C1_T2_INNER_V4x" .-> T3_INNER
+    C2 -. "BGP tcp/179<br/>xXC_C2_T2_INNER_V4x → xBIGIP_C2_T2_INNER_V4x" .-> T4_INNER
+```

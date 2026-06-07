@@ -1,0 +1,27 @@
+---
+title: 受保護前綴
+description: Cloud 防禦 DDoS 攻擊所需的公共 IP 位址區塊要求。
+sidebar:
+  order: 2
+i18n:
+  sourceHash: feee5198d63d
+  translator: machine
+---
+
+## 受保護前綴（公共 IP）
+
+**受保護前綴**是您組織的公共 IP 位址區塊，由
+Cloud 負責防禦 DDoS 攻擊。
+
+| 要求 | IPv4 | IPv6 |
+|-------------|------|------|
+| **最小大小** | /24（256 個 IP） | /48 |
+| **可路由性** | 可公開路由（非 RFC 1918） | 全域單播（非 ULA） |
+| **註冊** | RIR 分配（ARIN、RIPE、APNIC） | RIR 分配 |
+| **證明** | LOA 或 IRR/ROA 註冊 | LOA 或 IRR/ROA 註冊 |
+
+**流量流程：**
+
+1. Cloud 透過 BGP 任播在全球宣告您的前綴
+1. 所有目的地為您 IP 的網際網路流量會路由至清洗中心
+1. 攻擊流量被丟棄；乾淨流量透過 GRE 隧道傳遞

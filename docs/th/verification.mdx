@@ -1,0 +1,100 @@
+---
+title: Verification
+description: ตรวจสอบ GRE tunnel และการกำหนดค่า BGP บน BIG-IP รวมถึงแก้ไขปัญหาที่พบบ่อย
+sidebar:
+  order: 6
+i18n:
+  sourceHash: 696153ba9b9a
+  translator: machine
+---
+
+## การตรวจสอบ
+
+### BIG-IP
+
+#### Tunnels
+
+รันบนแต่ละยูนิตสำหรับ tunnel ของตัวเอง:
+
+```shell title="tmsh"
+show net tunnels tunnel xc-ddos-c1t1-v4
+show net tunnels tunnel xc-ddos-c1t1-v6
+show net tunnels tunnel xc-ddos-c1t2-v4
+show net tunnels tunnel xc-ddos-c1t2-v6
+show net tunnels tunnel xc-ddos-c2t1-v4
+show net tunnels tunnel xc-ddos-c2t1-v6
+show net tunnels tunnel xc-ddos-c2t2-v4
+show net tunnels tunnel xc-ddos-c2t2-v6
+list net tunnels tunnel xc-ddos-c1t1-v4 all-properties
+```
+
+#### Self IPs
+
+```shell title="tmsh"
+list net self xc-ddos-*
+```
+
+#### การตรวจสอบเส้นทาง
+
+จากแต่ละยูนิต:
+
+```shell title="tmsh"
+# BIG-IP-A tunnels
+ping xXC_C1_T1_INNER_V4x source xBIGIP_C1_T1_INNER_V4x
+ping xXC_C2_T1_INNER_V4x source xBIGIP_C2_T1_INNER_V4x
+
+# BIG-IP-B tunnels
+ping xXC_C1_T2_INNER_V4x source xBIGIP_C1_T2_INNER_V4x
+ping xXC_C2_T2_INNER_V4x source xBIGIP_C2_T2_INNER_V4x
+```
+
+#### BGP
+
+ใน imish บนแต่ละยูนิต:
+
+```shell title="imish"
+show ip bgp summary
+show ipv6 bgp summary
+show ip bgp
+show ipv6 bgp
+
+# BIG-IP-A neighbors
+show ip bgp neighbors xXC_C1_T1_INNER_V4x
+show ip bgp neighbors xXC_C2_T1_INNER_V4x
+show ip bgp neighbors xXC_C1_T1_INNER_V4x advertised-routes
+show ip bgp neighbors xXC_C1_T1_INNER_V4x received-routes
+
+# BIG-IP-B neighbors
+show ip bgp neighbors xXC_C1_T2_INNER_V4x
+show ip bgp neighbors xXC_C2_T2_INNER_V4x
+show ip bgp neighbors xXC_C1_T2_INNER_V4x advertised-routes
+show ip bgp neighbors xXC_C1_T2_INNER_V4x received-routes
+
+show ip route
+show ipv6 route
+```
+
+:::caution[รายการตรวจสอบการแก้ไขปัญหา]
+หาก BGP ไม่สามารถสร้างการเชื่อมต่อได้:
+
+1. ตรวจสอบว่า GRE tunnel ทำงานอยู่: `show net tunnels tunnel` ควร
+   แสดงสถานะ `up`
+1. ยืนยันว่า `allow-service` รวม `tcp:179` บน inner self IP
+1. Ping ไปยัง remote inner IP ผ่าน tunnel
+1. ตรวจสอบว่ารหัสผ่าน BGP ตรงกันทั้งสองฝั่ง (สาเหตุที่พบบ่อยของ
+   ข้อผิดพลาด `NOTIFICATION`)
+1. ตรวจสอบว่า prefix-lists และ route-maps ถูกนำไปใช้อย่างถูกต้อง
+1. ตรวจสอบ `show ip bgp neighbors <IP>` สำหรับข้อผิดพลาด/สาเหตุการ
+   รีเซ็ตล่าสุด
+1. บนแต่ละยูนิต HA ให้ตรวจสอบว่า tunnel ของยูนิตนั้นทำงานอยู่และ
+   BGP neighbors ของยูนิตนั้นได้รับการกำหนดค่าแล้ว (ไม่ใช่ของยูนิตอื่น)
+:::
+
+### XC Console
+
+ไปที่ **DDoS and Transit Services >
+[DDoS Protection > Visibility](https://docs.cloud.f5.com/docs-v2/ddos-and-transit-services/how-tos/network-firewall/l3l4-ddos-mitigation)** เพื่อดู:
+
+- ทราฟฟิกตามเครือข่าย โซน และแอปพลิเคชัน
+- ทราฟฟิกที่ถูกบล็อกเทียบกับที่อนุญาต
+- รายละเอียดการโจมตีและการดำเนินการ scrubbing

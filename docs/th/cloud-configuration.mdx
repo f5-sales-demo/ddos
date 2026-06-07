@@ -1,0 +1,94 @@
+---
+title: Cloud Configuration
+description: >-
+  Configure tunnels, ASNs, and routes in the Cloud Console for routed DDoS
+  mitigation.
+sidebar:
+  order: 4
+i18n:
+  sourceHash: 606c77582a14
+  translator: machine
+---
+
+## XC (UI)
+
+ใช้เว็บอินเทอร์เฟซเพื่อกำหนดค่าฝั่ง **Cloud** โดยอ้างอิงจากคู่มือ
+[L3/L4 Routed DDoS Mitigation](https://docs.cloud.f5.com/docs-v2/ddos-and-transit-services/how-tos/network-firewall/l3l4-ddos-mitigation)
+
+### เปิดใช้งาน DDoS workspace
+
+ก่อนที่คุณจะสามารถกำหนดค่า tunnels และ BGP ได้:
+
+1. ติดต่อทีม Cloud (ผ่าน `sales@example.com`
+   หรือทีมบัญชีของคุณ) เพื่อ:
+    - เปิดใช้งาน **Routed DDoS Mitigation** workspace สำหรับ tenant ของคุณ
+    - จัดเตรียมข้อมูลต่อไปนี้:
+        - **public IP netblocks** (/24 หรือสั้นกว่าสำหรับ IPv4, /48 หรือ
+          สั้นกว่าสำหรับ IPv6) และหลักฐานการเป็นเจ้าของ (หรือ LOA)
+        - **ASN** ของคุณ (ต้องออกโดย ARIN หรือ registry ที่เทียบเท่า)
+        - การลงทะเบียน **IRR** (RIPE, ARIN, APNIC เป็นต้น) และ **ROA** ใน
+          RPKI repository
+        - **วิธีการส่ง clean-traffic กลับ** ที่ต้องการ (GRE tunnels, Layer 2,
+          private peering ผ่าน Equinix เป็นต้น)
+        - ตำแหน่ง data center และ routers ที่ต้องการป้องกัน
+        - **AS-Path prepends** ที่จำเป็นสำหรับการประกาศ route
+        - **BGP communities**, route preferences หรือ **AS-SET** ใดๆ
+
+1. SOC จะจัดเตรียม:
+    - Tunnels
+    - ASNs
+    - Protected prefixes
+    - ตัวเลือกการประกาศ route
+    - Fast ACLs / firewall policies ตามความจำเป็น
+
+### Tunnels
+
+1. เข้าสู่ระบบ [Cloud Console](https://docs.cloud.f5.com/docs-v2/ddos-and-transit-services/how-tos/network-firewall/l3l4-ddos-mitigation) และ
+   เลือก **Routed DDoS** จากตัวเลือกบริการ
+1. ไปที่ **Manage > Tunnels > Add Tunnel** แล้วกำหนดค่า:
+    - **Location Name** และ **Availability Zone** (Zone 1 เป็นค่าเริ่มต้น)
+    - **Bandwidth Max in MB**
+    - **Tunnel Type**:
+        - **GRE Over IPv4** สำหรับ outer tunnel แบบ IPv4
+        - **GRE Over IPv6** สำหรับ outer tunnel แบบ IPv6
+        - **IP Over IP** สำหรับการห่อหุ้มแบบ IPv4-in-IPv4
+        - **IPv6 Over IPv6** สำหรับการห่อหุ้มแบบ IPv6-in-IPv6
+    - **Customer Endpoint IP**: ที่อยู่ภายนอกของ BIG-IP (outer self
+      IP ต้องสามารถ route ได้แบบ public เมื่อ tunnels ผ่านอินเทอร์เน็ต
+      สาธารณะ)
+    - ตัวเลือกเสริม: IPv4/IPv6 interconnect, fragmentation, keepalive (ทั้งหมด
+      ปิดใช้งานเป็นค่าเริ่มต้น)
+1. ภายใต้ **Tunnel BGP Information**:
+    - เลือก **ASN object** (ASN ของคุณ)
+    - ตั้งค่า **Customer Peer Secret Override**: Use Default Secret
+      (ค่าเริ่มต้น), BGP Password Override (blindfolded หรือ clear text) หรือ
+      No Secret
+    - ตั้งค่า **Holddown Timer** เป็นวินาที หากแตกต่างจาก
+      ค่าเริ่มต้น
+
+SOC อาจสร้าง tunnel objects เหล่านี้ล่วงหน้าให้คุณ คุณเพียงแค่จับคู่
+**endpoint IPs** และการตั้งค่า BGP บน BIG-IP
+
+### ASNs และ Routes
+
+- **ASNs**: -> **Manage > ASNs > Add ASN**
+    - กรอก ASN ของคุณและตรวจสอบว่า BGP ถูกเปิดใช้งาน
+
+- **Prefixes**: -> **Manage > Prefixes > Add Prefix**
+    - กรอก IP prefix แต่ละรายการและเชื่อมโยงกับ ASN ของคุณ
+
+- **Route Advertisements** -> **Manage > Route Advertisement > Add Route Advertisement**
+    - กรอก prefix เลือก **Active** หรือ **Not Advertised** และ
+      วันหมดอายุตามต้องการ
+
+objects เหล่านี้ควบคุมว่า prefixes ใดจะถูกประกาศผ่านเครือข่าย global
+เมื่อบริการทำงานอยู่
+
+### Network Restriction
+
+**Firewall Rules**, **Deny List Rules** และ **Fast ACLs for Internet
+VIPs** ช่วยให้คุณ:
+
+- บล็อกหรืออนุญาตทราฟฟิกเฉพาะ
+- จำกัดอัตราแหล่งที่มาที่เป็นอันตราย
+- ใช้การป้องกัน DDoS เพิ่มเติมนอกเหนือจากการ scrubbing เชิงปริมาตรอย่างเดียว

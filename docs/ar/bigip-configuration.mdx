@@ -1,0 +1,416 @@
+---
+title: تكوين BIG-IP
+description: >-
+  أوامر tmsh و imish لتكوين أنفاق GRE وعناوين Self IPs وبروتوكول BGP على أزواج
+  BIG-IP HA.
+sidebar:
+  order: 5
+i18n:
+  sourceHash: 23019a13550e
+  translator: machine
+---
+
+## BIG-IP
+
+- (مثال Route Domain 0)
+
+جميع الأوامر أدناه يتم تنفيذها في **tmsh** على BIG-IP. قم بتعديل أسماء الكائنات وعناوين IP حسب الحاجة.
+
+للاطلاع على التكوين العام لأنفاق GRE على BIG-IP، راجع
+[Configuring a GRE Tunnel Using BIG-IP](https://community.f5.com/kb/technicalarticles/configuring-a-generic-routing-encapsulation-gre-tunnel-using-big-ip/289030). لإعداد التكوين الموجّه الأولي مع السحابة، راجع [K000147949](https://my.f5.com/manage/s/article/K000147949).
+
+### tmsh
+
+```bash title="tmsh"
+[root@bigip:Active]# tmsh
+root@(bigip)(cfg-sync Standalone)(Active)(/Common)(tmos)#
+```
+
+### عناوين Self IPs الخارجية
+
+نقاط نهاية GRE
+
+هذه هي عناوين IP على كل وحدة BIG-IP المستخدمة كـ **نقاط نهاية لأنفاق GRE**، وعادةً ما تكون على شبكة VLAN الخارجية. كل وحدة لها عنوان Self IP خارجي خاص بها غير عائم (`traffic-group-local-only`):
+
+**BIG-IP-A:**
+
+```shell title="tmsh"
+create net self xc-ddos-v4-self-a \
+  vlan external \
+  traffic-group traffic-group-local-only \
+  allow-service add { icmp:any gre:any } \
+  address xBIGIP_A_OUTER_V4x/24
+
+create net self xc-ddos-v6-self-a \
+  vlan external \
+  traffic-group traffic-group-local-only \
+  allow-service add { icmp:any gre:any } \
+  address xBIGIP_A_OUTER_V6x/64
+```
+
+**BIG-IP-B:**
+
+```shell title="tmsh"
+create net self xc-ddos-v4-self-b \
+  vlan external \
+  traffic-group traffic-group-local-only \
+  allow-service add { icmp:any gre:any } \
+  address xBIGIP_B_OUTER_V4x/24
+
+create net self xc-ddos-v6-self-b \
+  vlan external \
+  traffic-group traffic-group-local-only \
+  allow-service add { icmp:any gre:any } \
+  address xBIGIP_B_OUTER_V6x/64
+```
+
+### أنفاق GRE
+
+كل نفق يربط من وحدة BIG-IP إلى نقطة نهاية مركز تنظيف السحابة. قم بإنشاء **نفقين لكل وحدة** (واحد لكل مركز تنظيف حسب الموقع الجغرافي) ليصبح المجموع **أربعة أنفاق منطقية** عبر زوج HA:
+
+**النفق C1-T1 — BIG-IP-A إلى xCENTER_1x:**
+
+```shell title="tmsh"
+create net tunnels tunnel xc-ddos-c1t1-v4 \
+  local-address xBIGIP_A_OUTER_V4x \
+  profile gre \
+  remote-address xXC_C1_OUTER_V4x
+
+create net tunnels tunnel xc-ddos-c1t1-v6 \
+  local-address xBIGIP_A_OUTER_V6x \
+  profile gre \
+  remote-address xXC_C1_OUTER_V6x
+```
+
+**النفق C2-T1 — BIG-IP-A إلى xCENTER_2x:**
+
+```shell title="tmsh"
+create net tunnels tunnel xc-ddos-c2t1-v4 \
+  local-address xBIGIP_A_OUTER_V4x \
+  profile gre \
+  remote-address xXC_C2_OUTER_V4x
+
+create net tunnels tunnel xc-ddos-c2t1-v6 \
+  local-address xBIGIP_A_OUTER_V6x \
+  profile gre \
+  remote-address xXC_C2_OUTER_V6x
+```
+
+**النفق C1-T2 — BIG-IP-B إلى xCENTER_1x:**
+
+```shell title="tmsh"
+create net tunnels tunnel xc-ddos-c1t2-v4 \
+  local-address xBIGIP_B_OUTER_V4x \
+  profile gre \
+  remote-address xXC_C1_OUTER_V4x
+
+create net tunnels tunnel xc-ddos-c1t2-v6 \
+  local-address xBIGIP_B_OUTER_V6x \
+  profile gre \
+  remote-address xXC_C1_OUTER_V6x
+```
+
+**النفق C2-T2 — BIG-IP-B إلى xCENTER_2x:**
+
+```shell title="tmsh"
+create net tunnels tunnel xc-ddos-c2t2-v4 \
+  local-address xBIGIP_B_OUTER_V4x \
+  profile gre \
+  remote-address xXC_C2_OUTER_V4x
+
+create net tunnels tunnel xc-ddos-c2t2-v6 \
+  local-address xBIGIP_B_OUTER_V6x \
+  profile gre \
+  remote-address xXC_C2_OUTER_V6x
+```
+
+أسماء الأنفاق (`xc-ddos-c1t1-v4`، إلخ) اختيارية؛ استخدم اصطلاح التسمية الخاص بك.
+
+### تعيين MTU للنفق
+
+يضيف تغليف GRE حملاً إضافياً (24 بايت للغلاف الخارجي IPv4، و44 بايت للغلاف الخارجي IPv6). بدون تعيين MTU صريح، ستتعرض الحزم القريبة من 1500 بايت للتجزئة أو الإسقاط. قم بتعيين MTU للنفق لمراعاة الحمل الإضافي للتغليف:
+
+```shell title="tmsh"
+modify net tunnels tunnel xc-ddos-c1t1-v4 mtu 1476
+modify net tunnels tunnel xc-ddos-c1t1-v6 mtu 1456
+modify net tunnels tunnel xc-ddos-c1t2-v4 mtu 1476
+modify net tunnels tunnel xc-ddos-c1t2-v6 mtu 1456
+modify net tunnels tunnel xc-ddos-c2t1-v4 mtu 1476
+modify net tunnels tunnel xc-ddos-c2t1-v6 mtu 1456
+modify net tunnels tunnel xc-ddos-c2t2-v4 mtu 1476
+modify net tunnels tunnel xc-ddos-c2t2-v6 mtu 1456
+```
+
+:::caution[Path MTU]
+تفترض القيم أعلاه أن Path MTU على الشبكة الخارجية هو 1500 بايت.
+قم بالتعديل إذا كان Path MTU الخاص بمسارك الأعلى أصغر. تأكد من أن رسائل ICMP
+"destination unreachable / fragmentation needed" (النوع 3، الرمز 4)
+**غير محظورة** على أي جهاز وسيط حتى يعمل اكتشاف Path MTU (PMTUD) بشكل صحيح.
+:::
+
+### مكافحة الانتحال في GRE (قوائم التحكم بالوصول الأعلى)
+
+لا يوفر GRE (بروتوكول IP رقم 47) مصادقة. أي شخص يعرف زوج عناوين IP الخارجية يمكنه حقن حركة مرور في النفق. قم بتطبيق قوائم التحكم بالوصول (ACLs) على الموجّه أو جدار الحماية الأعلى لتقييد حركة GRE الواردة إلى عناوين IP المصدرية المتوقعة فقط من مراكز تنظيف السحابة:
+
+```shell title="Cisco IOS"
+! Example upstream router ACL (Cisco IOS style)
+ip access-list extended ALLOW-XC-GRE
+  permit gre host xXC_C1_OUTER_V4x host xBIGIP_A_OUTER_V4x
+  permit gre host xXC_C2_OUTER_V4x host xBIGIP_A_OUTER_V4x
+  permit gre host xXC_C1_OUTER_V4x host xBIGIP_B_OUTER_V4x
+  permit gre host xXC_C2_OUTER_V4x host xBIGIP_B_OUTER_V4x
+  deny   gre any host xBIGIP_A_OUTER_V4x log
+  deny   gre any host xBIGIP_B_OUTER_V4x log
+```
+
+:::note
+قم بتكييف الصيغة وفقاً لمنصة الموجّه الخاص بك. ينطبق نفس المبدأ على قوائم التحكم بالوصول IPv6 لأنفاق GRE الخاصة بـ IPv6. يجب السماح لعناوين IP الخارجية لكل من BIG-IP-A
+(`xBIGIP_A_OUTER_V4x`) وBIG-IP-B (`xBIGIP_B_OUTER_V4x`)
+كوجهات GRE.
+:::
+
+### عناوين Self IPs الداخلية (ربط BGP)
+
+قم بتعيين عناوين IP داخلية (داخل نفق GRE) التي ستشكل **جلسة BGP** مع السحابة. يجب أن يتضمن `allow-service` البروتوكول `tcp:179` (BGP) لكي تتأسس جلسة الربط. إضافة `icmp:any` على عناوين Self IPs الداخلية يمكّن PMTUD واختبار إمكانية الوصول عبر النفق:
+
+**النفق C1-T1 — BIG-IP-A إلى xCENTER_1x:**
+
+```shell title="tmsh"
+create net self xc-ddos-c1t1-inner-v4 \
+  vlan xc-ddos-c1t1-v4 \
+  traffic-group traffic-group-local-only \
+  allow-service add { tcp:179 icmp:any } \
+  address xBIGIP_C1_T1_INNER_V4x/30
+
+create net self xc-ddos-c1t1-inner-v6 \
+  vlan xc-ddos-c1t1-v6 \
+  traffic-group traffic-group-local-only \
+  allow-service add { tcp:179 icmp:any } \
+  address xBIGIP_C1_T1_INNER_V6x/64
+```
+
+**النفق C2-T1 — BIG-IP-A إلى xCENTER_2x:**
+
+```shell title="tmsh"
+create net self xc-ddos-c2t1-inner-v4 \
+  vlan xc-ddos-c2t1-v4 \
+  traffic-group traffic-group-local-only \
+  allow-service add { tcp:179 icmp:any } \
+  address xBIGIP_C2_T1_INNER_V4x/30
+
+create net self xc-ddos-c2t1-inner-v6 \
+  vlan xc-ddos-c2t1-v6 \
+  traffic-group traffic-group-local-only \
+  allow-service add { tcp:179 icmp:any } \
+  address xBIGIP_C2_T1_INNER_V6x/64
+```
+
+**النفق C1-T2 — BIG-IP-B إلى xCENTER_1x:**
+
+```shell title="tmsh"
+create net self xc-ddos-c1t2-inner-v4 \
+  vlan xc-ddos-c1t2-v4 \
+  traffic-group traffic-group-local-only \
+  allow-service add { tcp:179 icmp:any } \
+  address xBIGIP_C1_T2_INNER_V4x/30
+
+create net self xc-ddos-c1t2-inner-v6 \
+  vlan xc-ddos-c1t2-v6 \
+  traffic-group traffic-group-local-only \
+  allow-service add { tcp:179 icmp:any } \
+  address xBIGIP_C1_T2_INNER_V6x/64
+```
+
+**النفق C2-T2 — BIG-IP-B إلى xCENTER_2x:**
+
+```shell title="tmsh"
+create net self xc-ddos-c2t2-inner-v4 \
+  vlan xc-ddos-c2t2-v4 \
+  traffic-group traffic-group-local-only \
+  allow-service add { tcp:179 icmp:any } \
+  address xBIGIP_C2_T2_INNER_V4x/30
+
+create net self xc-ddos-c2t2-inner-v6 \
+  vlan xc-ddos-c2t2-v6 \
+  traffic-group traffic-group-local-only \
+  allow-service add { tcp:179 icmp:any } \
+  address xBIGIP_C2_T2_INNER_V6x/64
+```
+
+### BGP
+
+استخدم [imish](https://techdocs.f5.com/kb/en-us/products/big-ip_ltm/manuals/product/big-ip-tmos-routing-administration-14-0-0/11.html) لتكوين BGP لـ Route Domain 0.
+
+:::note[تكوين خاص بكل وحدة]
+تكوين BGP في `imish` محلي لكل وحدة BIG-IP. كل وحدة تقوم فقط بتكوين الجيران الخاصين بأنفاقها:
+
+- **BIG-IP-A** تقوم بتكوين جيران C1-T1 وC2-T1.
+- **BIG-IP-B** تقوم بتكوين جيران C1-T2 وC2-T2.
+
+يجب أن يكون `router-id` فريداً لكل وحدة (استخدم عنوان Self IP الخارجي الخاص بكل وحدة).
+:::
+
+1. ادخل إلى imish لـ RD 0:
+
+   ```bash title="bash"
+   tmsh run /util imish -r 0
+   ```
+
+1. ادخل إلى الوضع المميز ووضع التكوين:
+
+   ```shell title="imish"
+   localhost.localdomain[0]> enable
+   localhost.localdomain[0]# configure terminal
+   ```
+
+1. مثال على تكوين BGP:
+
+:::caution[استبدل القيم المؤقتة]
+- `xCUSTOMER_ASNx` — رقم ASN العام الخاص بك المسجّل لدى ARIN (أو RIR المعادل). يُعد **رقم ASN العام مطلوباً** لخدمة DDoS الموجّهة لأن السحابة ستعلن عن بادئاتك عالمياً. رقم ASN الخاص (64512-65534 / 4200000000-4294967294) مقبول فقط إذا كان SOC يدعم صراحةً ربط ASN الخاص لعملية نشرك.
+- `xF5_XC_ASNx` — رقم ASN الخاص بالسحابة (يتم توفيره من قبل SOC).
+- `xBGP_PASSWORDx` — كلمة مرور BGP MD5 المتفق عليها (أو تطابق "default secret" في وحدة التحكم). لا تعد استخدام كلمة المرور هذه لخدمات أخرى.
+:::
+
+**BIG-IP-A** (router-id `xBIGIP_A_OUTER_V4x`، الجيران C1-T1 + C2-T1):
+
+```shell title="imish"
+router bgp xCUSTOMER_ASNx
+  no synchronization
+  bgp log-neighbor-changes
+  no auto-summary
+  bgp router-id xBIGIP_A_OUTER_V4x
+  bgp graceful-restart restart-time 120
+  redistribute kernel route-map route-to-cloud-ipv4
+
+  neighbor cloud peer-group
+  neighbor cloud remote-as xF5_XC_ASNx
+  neighbor cloud description cloud-peer-group
+  neighbor cloud password xBGP_PASSWORDx
+  neighbor cloud timers 10 30
+  neighbor cloud soft-reconfiguration inbound
+  neighbor cloud version 4
+  neighbor cloud capability graceful-restart
+  neighbor cloud send-community
+  neighbor cloud ttl-security hops 1
+  neighbor cloud maximum-prefix 10 warning-only
+  neighbor cloud prefix-list deny-all in
+  neighbor cloud prefix-list route-to-cloud-ipv4 out
+
+  neighbor xXC_C1_T1_INNER_V4x peer-group cloud
+  neighbor xXC_C1_T1_INNER_V4x description cloud-c1-t1-v4
+
+  neighbor xXC_C2_T1_INNER_V4x peer-group cloud
+  neighbor xXC_C2_T1_INNER_V4x description cloud-c2-t1-v4
+
+  address-family ipv6
+    redistribute kernel route-map route-to-cloud-ipv6
+    neighbor cloud activate
+    neighbor cloud soft-reconfiguration inbound
+    neighbor cloud capability graceful-restart
+    neighbor cloud prefix-list deny-all6 in
+    neighbor cloud prefix-list route-to-cloud-ipv6 out
+    neighbor xXC_C1_T1_INNER_V6x peer-group cloud
+    neighbor xXC_C1_T1_INNER_V6x description cloud-c1-t1-v6
+    neighbor xXC_C2_T1_INNER_V6x peer-group cloud
+    neighbor xXC_C2_T1_INNER_V6x description cloud-c2-t1-v6
+  exit-address-family
+
+ip prefix-list deny-all deny 0.0.0.0/0 le 32
+ip prefix-list route-to-cloud-ipv4 permit xPROTECTED_PREFIX_V4x
+
+ipv6 prefix-list deny-all6 deny ::/0 le 128
+ipv6 prefix-list route-to-cloud-ipv6 permit xPROTECTED_PREFIX_V6x
+
+ip route xPROTECTED_NET_V4x xPROTECTED_MASK_V4x null0 201
+ipv6 route xPROTECTED_PREFIX_V6x null0 201
+
+route-map route-to-cloud-ipv4 permit 10
+  match ip address prefix-list route-to-cloud-ipv4
+  set origin igp
+
+route-map route-to-cloud-ipv6 permit 10
+  match ipv6 address prefix-list route-to-cloud-ipv6
+  set origin igp
+```
+
+**BIG-IP-B** (router-id `xBIGIP_B_OUTER_V4x`، الجيران C1-T2 + C2-T2):
+
+```shell title="imish"
+router bgp xCUSTOMER_ASNx
+  no synchronization
+  bgp log-neighbor-changes
+  no auto-summary
+  bgp router-id xBIGIP_B_OUTER_V4x
+  bgp graceful-restart restart-time 120
+  redistribute kernel route-map route-to-cloud-ipv4
+
+  neighbor cloud peer-group
+  neighbor cloud remote-as xF5_XC_ASNx
+  neighbor cloud description cloud-peer-group
+  neighbor cloud password xBGP_PASSWORDx
+  neighbor cloud timers 10 30
+  neighbor cloud soft-reconfiguration inbound
+  neighbor cloud version 4
+  neighbor cloud capability graceful-restart
+  neighbor cloud send-community
+  neighbor cloud ttl-security hops 1
+  neighbor cloud maximum-prefix 10 warning-only
+  neighbor cloud prefix-list deny-all in
+  neighbor cloud prefix-list route-to-cloud-ipv4 out
+
+  neighbor xXC_C1_T2_INNER_V4x peer-group cloud
+  neighbor xXC_C1_T2_INNER_V4x description cloud-c1-t2-v4
+
+  neighbor xXC_C2_T2_INNER_V4x peer-group cloud
+  neighbor xXC_C2_T2_INNER_V4x description cloud-c2-t2-v4
+
+  address-family ipv6
+    redistribute kernel route-map route-to-cloud-ipv6
+    neighbor cloud activate
+    neighbor cloud soft-reconfiguration inbound
+    neighbor cloud capability graceful-restart
+    neighbor cloud prefix-list deny-all6 in
+    neighbor cloud prefix-list route-to-cloud-ipv6 out
+    neighbor xXC_C1_T2_INNER_V6x peer-group cloud
+    neighbor xXC_C1_T2_INNER_V6x description cloud-c1-t2-v6
+    neighbor xXC_C2_T2_INNER_V6x peer-group cloud
+    neighbor xXC_C2_T2_INNER_V6x description cloud-c2-t2-v6
+  exit-address-family
+
+ip prefix-list deny-all deny 0.0.0.0/0 le 32
+ip prefix-list route-to-cloud-ipv4 permit xPROTECTED_PREFIX_V4x
+
+ipv6 prefix-list deny-all6 deny ::/0 le 128
+ipv6 prefix-list route-to-cloud-ipv6 permit xPROTECTED_PREFIX_V6x
+
+ip route xPROTECTED_NET_V4x xPROTECTED_MASK_V4x null0 201
+ipv6 route xPROTECTED_PREFIX_V6x null0 201
+
+route-map route-to-cloud-ipv4 permit 10
+  match ip address prefix-list route-to-cloud-ipv4
+  set origin igp
+
+route-map route-to-cloud-ipv6 permit 10
+  match ipv6 address prefix-list route-to-cloud-ipv6
+  set origin igp
+```
+
+**شرح إعدادات BGP الرئيسية:**
+
+- **`timers 10 30`** — إرسال Keepalive كل 10 ثوانٍ، وزمن الانتظار 30 ثانية. القيم الافتراضية (60 / 180) بطيئة جداً لتجاوز فشل التخفيف من هجمات DDoS. قم بتنسيق قيم المؤقتات مع SOC لمطابقة كلا الجانبين.
+- **`ttl-security hops 1`** — يُفعّل GTSM
+  ([RFC 5082](https://datatracker.ietf.org/doc/html/rfc5082)). نظراً لأن جلسات BGP أحادية القفزة عبر نفق GRE، فإن هذا يمنع انتحال BGP عن بُعد من خلال اشتراط TTL = 255 على حزم BGP الواردة.
+- **`maximum-prefix 10 warning-only`** — ضمانة دفاع متعدد الطبقات. على الرغم من أن قائمة البادئات الواردة ترفض جميع المسارات، فإن هذا يُولّد تحذيراً إذا أرسل النظير بادئات بشكل غير متوقع.
+- **`redistribute kernel`** — يحقن المسارات الثابتة `null0` في BGP عبر خريطة المسار. البديل هو استخدام عبارات `network` صريحة (مثل `network xPROTECTED_PREFIX_V4x`)، وهي أكثر دقة لأنه يتم الإعلان عن البادئة المحددة فقط بغض النظر عن مسارات النواة الأخرى. كلا الأسلوبين يعمل؛ يُعرض هنا `redistribute kernel` مع خريطة مسار صارمة للمرونة.
+
+:::tip[BFD (اكتشاف إعادة التوجيه ثنائي الاتجاه)]
+إذا كان إصدار BIG-IP الخاص بك يدعم BFD عبر أنفاق GRE، فقم بتفعيله لاكتشاف الفشل في أقل من ثانية:
+
+```shell
+neighbor cloud fall-over bfd
+```
+
+يوفر BFD تقارباً أسرع من مؤقتات BGP keepalive وحدها. تأكد من دعم BFD مع إصدار BIG-IP الخاص بك ومع SOC قبل التفعيل.
+:::
+
+تضمن المسارات الثابتة `null0` ذات المسافة الإدارية الأعلى (201) وجود البادئات في **جدول توجيه النواة**، بحيث يمكن إعادة توزيعها إلى السحابة عبر BGP دون التأثير على التوجيه الطبيعي في ظروف عدم الهجوم. إذا كانت البادئة المحمية موجودة بالفعل في جدول التوجيه من مصدر آخر بمسافة إدارية أقل، فلن يكون مسار `null0` نشطاً وقد يفشل إعادة التوزيع — تحقق باستخدام `show ip route` بعد التكوين.

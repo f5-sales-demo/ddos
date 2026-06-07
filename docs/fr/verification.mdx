@@ -1,0 +1,102 @@
+---
+title: Vérification
+description: >-
+  Vérifiez la configuration du tunnel GRE et du BGP sur BIG-IP, et résolvez les
+  problèmes courants.
+sidebar:
+  order: 6
+i18n:
+  sourceHash: 696153ba9b9a
+  translator: machine
+---
+
+## Vérification
+
+### BIG-IP
+
+#### Tunnels
+
+Exécutez sur chaque unité pour ses propres tunnels :
+
+```shell title="tmsh"
+show net tunnels tunnel xc-ddos-c1t1-v4
+show net tunnels tunnel xc-ddos-c1t1-v6
+show net tunnels tunnel xc-ddos-c1t2-v4
+show net tunnels tunnel xc-ddos-c1t2-v6
+show net tunnels tunnel xc-ddos-c2t1-v4
+show net tunnels tunnel xc-ddos-c2t1-v6
+show net tunnels tunnel xc-ddos-c2t2-v4
+show net tunnels tunnel xc-ddos-c2t2-v6
+list net tunnels tunnel xc-ddos-c1t1-v4 all-properties
+```
+
+#### Self IPs
+
+```shell title="tmsh"
+list net self xc-ddos-*
+```
+
+#### Vérification du chemin
+
+Depuis chaque unité :
+
+```shell title="tmsh"
+# BIG-IP-A tunnels
+ping xXC_C1_T1_INNER_V4x source xBIGIP_C1_T1_INNER_V4x
+ping xXC_C2_T1_INNER_V4x source xBIGIP_C2_T1_INNER_V4x
+
+# BIG-IP-B tunnels
+ping xXC_C1_T2_INNER_V4x source xBIGIP_C1_T2_INNER_V4x
+ping xXC_C2_T2_INNER_V4x source xBIGIP_C2_T2_INNER_V4x
+```
+
+#### BGP
+
+Dans imish sur chaque unité :
+
+```shell title="imish"
+show ip bgp summary
+show ipv6 bgp summary
+show ip bgp
+show ipv6 bgp
+
+# BIG-IP-A neighbors
+show ip bgp neighbors xXC_C1_T1_INNER_V4x
+show ip bgp neighbors xXC_C2_T1_INNER_V4x
+show ip bgp neighbors xXC_C1_T1_INNER_V4x advertised-routes
+show ip bgp neighbors xXC_C1_T1_INNER_V4x received-routes
+
+# BIG-IP-B neighbors
+show ip bgp neighbors xXC_C1_T2_INNER_V4x
+show ip bgp neighbors xXC_C2_T2_INNER_V4x
+show ip bgp neighbors xXC_C1_T2_INNER_V4x advertised-routes
+show ip bgp neighbors xXC_C1_T2_INNER_V4x received-routes
+
+show ip route
+show ipv6 route
+```
+
+:::caution[Liste de vérification pour le dépannage]
+Si le BGP ne s'établit pas :
+
+1. Vérifiez que le tunnel GRE est actif : `show net tunnels tunnel` devrait
+   afficher l'état `up`.
+1. Confirmez que `allow-service` inclut `tcp:179` sur la self IP interne.
+1. Effectuez un ping vers l'IP interne distante à travers le tunnel.
+1. Vérifiez que le mot de passe BGP correspond des deux côtés (cause fréquente
+   des erreurs `NOTIFICATION`).
+1. Vérifiez que les prefix-lists et les route-maps sont appliqués correctement.
+1. Consultez `show ip bgp neighbors <IP>` pour connaître la dernière erreur ou la
+   raison de la réinitialisation.
+1. Sur chaque unité HA, vérifiez que les tunnels propres à l'unité sont actifs et que
+   ses propres voisins BGP sont configurés (pas ceux de l'autre unité).
+:::
+
+### Console XC
+
+Naviguez vers **DDoS and Transit Services >
+[DDoS Protection > Visibility](https://docs.cloud.f5.com/docs-v2/ddos-and-transit-services/how-tos/network-firewall/l3l4-ddos-mitigation)** pour voir :
+
+- Le trafic par réseau, zone, application.
+- Le trafic bloqué par rapport au trafic autorisé.
+- Les détails des attaques et les actions de nettoyage (scrubbing).

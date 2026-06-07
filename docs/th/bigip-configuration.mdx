@@ -1,0 +1,465 @@
+---
+title: การกำหนดค่า BIG-IP
+description: >-
+  คำสั่ง tmsh และ imish สำหรับการกำหนดค่า GRE tunnels, self IPs และ BGP บน
+  BIG-IP HA pairs
+sidebar:
+  order: 5
+i18n:
+  sourceHash: 23019a13550e
+  translator: machine
+---
+
+## BIG-IP
+
+- (ตัวอย่าง Route Domain 0)
+
+คำสั่งทั้งหมดด้านล่างรันใน **tmsh** บน BIG-IP ปรับชื่อออบเจกต์
+และ IP ตามความจำเป็น
+
+สำหรับการกำหนดค่า GRE tunnel ทั่วไปบน BIG-IP ดูที่
+[Configuring a GRE Tunnel Using BIG-IP](https://community.f5.com/kb/technicalarticles/configuring-a-generic-routing-encapsulation-gre-tunnel-using-big-ip/289030) สำหรับการตั้งค่า
+routed configuration เริ่มต้นกับ Cloud ดูที่ [K000147949](https://my.f5.com/manage/s/article/K000147949)
+
+### tmsh
+
+```bash title="tmsh"
+[root@bigip:Active]# tmsh
+root@(bigip)(cfg-sync Standalone)(Active)(/Common)(tmos)#
+```
+
+### Outer Self IPs
+
+GRE endpoints
+
+เหล่านี้คือ IP บน BIG-IP แต่ละยูนิตที่ใช้เป็น **GRE tunnel
+endpoints** โดยปกติอยู่บน external VLAN แต่ละยูนิตมี
+non-floating outer self IP ของตัวเอง (`traffic-group-local-only`):
+
+**BIG-IP-A:**
+
+```shell title="tmsh"
+create net self xc-ddos-v4-self-a \
+  vlan external \
+  traffic-group traffic-group-local-only \
+  allow-service add { icmp:any gre:any } \
+  address xBIGIP_A_OUTER_V4x/24
+
+create net self xc-ddos-v6-self-a \
+  vlan external \
+  traffic-group traffic-group-local-only \
+  allow-service add { icmp:any gre:any } \
+  address xBIGIP_A_OUTER_V6x/64
+```
+
+**BIG-IP-B:**
+
+```shell title="tmsh"
+create net self xc-ddos-v4-self-b \
+  vlan external \
+  traffic-group traffic-group-local-only \
+  allow-service add { icmp:any gre:any } \
+  address xBIGIP_B_OUTER_V4x/24
+
+create net self xc-ddos-v6-self-b \
+  vlan external \
+  traffic-group traffic-group-local-only \
+  allow-service add { icmp:any gre:any } \
+  address xBIGIP_B_OUTER_V6x/64
+```
+
+### GRE tunnels
+
+แต่ละ tunnel เชื่อมต่อจากยูนิต BIG-IP ไปยัง Cloud
+scrubbing center endpoint สร้าง **tunnel สองอันต่อยูนิต** (อันละหนึ่ง
+ไปยัง scrubbing center แต่ละตำแหน่งทางภูมิศาสตร์) รวมเป็น **logical
+tunnel สี่อัน** ทั้ง HA pair:
+
+**Tunnel C1-T1 — BIG-IP-A ไปยัง xCENTER_1x:**
+
+```shell title="tmsh"
+create net tunnels tunnel xc-ddos-c1t1-v4 \
+  local-address xBIGIP_A_OUTER_V4x \
+  profile gre \
+  remote-address xXC_C1_OUTER_V4x
+
+create net tunnels tunnel xc-ddos-c1t1-v6 \
+  local-address xBIGIP_A_OUTER_V6x \
+  profile gre \
+  remote-address xXC_C1_OUTER_V6x
+```
+
+**Tunnel C2-T1 — BIG-IP-A ไปยัง xCENTER_2x:**
+
+```shell title="tmsh"
+create net tunnels tunnel xc-ddos-c2t1-v4 \
+  local-address xBIGIP_A_OUTER_V4x \
+  profile gre \
+  remote-address xXC_C2_OUTER_V4x
+
+create net tunnels tunnel xc-ddos-c2t1-v6 \
+  local-address xBIGIP_A_OUTER_V6x \
+  profile gre \
+  remote-address xXC_C2_OUTER_V6x
+```
+
+**Tunnel C1-T2 — BIG-IP-B ไปยัง xCENTER_1x:**
+
+```shell title="tmsh"
+create net tunnels tunnel xc-ddos-c1t2-v4 \
+  local-address xBIGIP_B_OUTER_V4x \
+  profile gre \
+  remote-address xXC_C1_OUTER_V4x
+
+create net tunnels tunnel xc-ddos-c1t2-v6 \
+  local-address xBIGIP_B_OUTER_V6x \
+  profile gre \
+  remote-address xXC_C1_OUTER_V6x
+```
+
+**Tunnel C2-T2 — BIG-IP-B ไปยัง xCENTER_2x:**
+
+```shell title="tmsh"
+create net tunnels tunnel xc-ddos-c2t2-v4 \
+  local-address xBIGIP_B_OUTER_V4x \
+  profile gre \
+  remote-address xXC_C2_OUTER_V4x
+
+create net tunnels tunnel xc-ddos-c2t2-v6 \
+  local-address xBIGIP_B_OUTER_V6x \
+  profile gre \
+  remote-address xXC_C2_OUTER_V6x
+```
+
+ชื่อ tunnel (`xc-ddos-c1t1-v4` เป็นต้น) เป็นชื่อที่กำหนดได้อิสระ; ใช้
+หลักการตั้งชื่อของคุณเอง
+
+### ตั้งค่า MTU ของ tunnel
+
+การห่อหุ้ม GRE จะเพิ่ม overhead (24 ไบต์สำหรับ IPv4 outer, 44 ไบต์
+สำหรับ IPv6 outer) หากไม่ระบุ MTU อย่างชัดเจน แพ็กเก็ตที่มีขนาดใกล้ 1500 ไบต์
+จะถูกแบ่ง fragment หรือถูกทิ้ง ตั้งค่า MTU ของ tunnel เพื่อรองรับ
+overhead ของการห่อหุ้ม:
+
+```shell title="tmsh"
+modify net tunnels tunnel xc-ddos-c1t1-v4 mtu 1476
+modify net tunnels tunnel xc-ddos-c1t1-v6 mtu 1456
+modify net tunnels tunnel xc-ddos-c1t2-v4 mtu 1476
+modify net tunnels tunnel xc-ddos-c1t2-v6 mtu 1456
+modify net tunnels tunnel xc-ddos-c2t1-v4 mtu 1476
+modify net tunnels tunnel xc-ddos-c2t1-v6 mtu 1456
+modify net tunnels tunnel xc-ddos-c2t2-v4 mtu 1476
+modify net tunnels tunnel xc-ddos-c2t2-v6 mtu 1456
+```
+
+:::caution[Path MTU]
+ค่าข้างต้นอิงจาก path MTU ขนาด 1500 ไบต์บนเครือข่าย outer
+ปรับค่าหาก upstream path MTU ของคุณมีขนาดเล็กกว่า ตรวจสอบให้แน่ใจว่า ICMP
+"destination unreachable / fragmentation needed" (type 3, code 4)
+**ไม่ถูก**บล็อกบนอุปกรณ์ตัวกลางใด ๆ เพื่อให้ Path MTU
+Discovery (PMTUD) ทำงานได้อย่างถูกต้อง
+:::
+
+### GRE anti-spoofing (upstream ACLs)
+
+GRE (IP protocol 47) ไม่มีการยืนยันตัวตน ใครก็ตามที่ทราบ
+คู่ outer IP สามารถแทรกทราฟฟิกเข้าไปใน tunnel ได้ ใช้
+ACLs บน upstream router หรือ firewall เพื่อจำกัดการรับ GRE ขาเข้า
+เฉพาะ IP ต้นทางจาก Cloud scrubbing-center ที่คาดหวังเท่านั้น:
+
+```shell title="Cisco IOS"
+! Example upstream router ACL (Cisco IOS style)
+ip access-list extended ALLOW-XC-GRE
+  permit gre host xXC_C1_OUTER_V4x host xBIGIP_A_OUTER_V4x
+  permit gre host xXC_C2_OUTER_V4x host xBIGIP_A_OUTER_V4x
+  permit gre host xXC_C1_OUTER_V4x host xBIGIP_B_OUTER_V4x
+  permit gre host xXC_C2_OUTER_V4x host xBIGIP_B_OUTER_V4x
+  deny   gre any host xBIGIP_A_OUTER_V4x log
+  deny   gre any host xBIGIP_B_OUTER_V4x log
+```
+
+:::note
+ปรับไวยากรณ์ให้เหมาะกับแพลตฟอร์ม router ของคุณ หลักการเดียวกัน
+ใช้ได้กับ IPv6 ACLs สำหรับ IPv6 GRE tunnels ทั้ง BIG-IP-A
+(`xBIGIP_A_OUTER_V4x`) และ BIG-IP-B (`xBIGIP_B_OUTER_V4x`)
+outer IPs จะต้องได้รับอนุญาตเป็น GRE destinations
+:::
+
+### Inner Self-IPs (BGP peering)
+
+กำหนด inner IP addresses (ภายใน GRE tunnel) ที่จะสร้าง
+**BGP session** กับ Cloud `allow-service` จะต้อง
+รวม `tcp:179` (BGP) เพื่อให้ peering session สามารถสร้างขึ้นได้ การเพิ่ม
+`icmp:any` บน inner self IPs จะเปิดใช้งาน PMTUD และการทดสอบ
+การเข้าถึงผ่าน tunnel:
+
+**Tunnel C1-T1 — BIG-IP-A ไปยัง xCENTER_1x:**
+
+```shell title="tmsh"
+create net self xc-ddos-c1t1-inner-v4 \
+  vlan xc-ddos-c1t1-v4 \
+  traffic-group traffic-group-local-only \
+  allow-service add { tcp:179 icmp:any } \
+  address xBIGIP_C1_T1_INNER_V4x/30
+
+create net self xc-ddos-c1t1-inner-v6 \
+  vlan xc-ddos-c1t1-v6 \
+  traffic-group traffic-group-local-only \
+  allow-service add { tcp:179 icmp:any } \
+  address xBIGIP_C1_T1_INNER_V6x/64
+```
+
+**Tunnel C2-T1 — BIG-IP-A ไปยัง xCENTER_2x:**
+
+```shell title="tmsh"
+create net self xc-ddos-c2t1-inner-v4 \
+  vlan xc-ddos-c2t1-v4 \
+  traffic-group traffic-group-local-only \
+  allow-service add { tcp:179 icmp:any } \
+  address xBIGIP_C2_T1_INNER_V4x/30
+
+create net self xc-ddos-c2t1-inner-v6 \
+  vlan xc-ddos-c2t1-v6 \
+  traffic-group traffic-group-local-only \
+  allow-service add { tcp:179 icmp:any } \
+  address xBIGIP_C2_T1_INNER_V6x/64
+```
+
+**Tunnel C1-T2 — BIG-IP-B ไปยัง xCENTER_1x:**
+
+```shell title="tmsh"
+create net self xc-ddos-c1t2-inner-v4 \
+  vlan xc-ddos-c1t2-v4 \
+  traffic-group traffic-group-local-only \
+  allow-service add { tcp:179 icmp:any } \
+  address xBIGIP_C1_T2_INNER_V4x/30
+
+create net self xc-ddos-c1t2-inner-v6 \
+  vlan xc-ddos-c1t2-v6 \
+  traffic-group traffic-group-local-only \
+  allow-service add { tcp:179 icmp:any } \
+  address xBIGIP_C1_T2_INNER_V6x/64
+```
+
+**Tunnel C2-T2 — BIG-IP-B ไปยัง xCENTER_2x:**
+
+```shell title="tmsh"
+create net self xc-ddos-c2t2-inner-v4 \
+  vlan xc-ddos-c2t2-v4 \
+  traffic-group traffic-group-local-only \
+  allow-service add { tcp:179 icmp:any } \
+  address xBIGIP_C2_T2_INNER_V4x/30
+
+create net self xc-ddos-c2t2-inner-v6 \
+  vlan xc-ddos-c2t2-v6 \
+  traffic-group traffic-group-local-only \
+  allow-service add { tcp:179 icmp:any } \
+  address xBIGIP_C2_T2_INNER_V6x/64
+```
+
+### BGP
+
+ใช้ [imish](https://techdocs.f5.com/kb/en-us/products/big-ip_ltm/manuals/product/big-ip-tmos-routing-administration-14-0-0/11.html) เพื่อกำหนดค่า BGP สำหรับ Route Domain 0
+
+:::note[การกำหนดค่าแต่ละยูนิต]
+การกำหนดค่า BGP ใน `imish` เป็นแบบ local สำหรับแต่ละยูนิต BIG-IP แต่ละ
+ยูนิตจะกำหนดค่า neighbors สำหรับ tunnel ของตัวเองเท่านั้น:
+
+- **BIG-IP-A** กำหนดค่า neighbors C1-T1 และ C2-T1
+- **BIG-IP-B** กำหนดค่า neighbors C1-T2 และ C2-T2
+
+`router-id` จะต้องไม่ซ้ำกันในแต่ละยูนิต (ใช้ outer
+self IP ของแต่ละยูนิต)
+:::
+
+1. เข้า imish สำหรับ RD 0:
+
+   ```bash title="bash"
+   tmsh run /util imish -r 0
+   ```
+
+1. เข้าสู่โหมด privileged และ config:
+
+   ```shell title="imish"
+   localhost.localdomain[0]> enable
+   localhost.localdomain[0]# configure terminal
+   ```
+
+1. ตัวอย่างการกำหนดค่า BGP:
+
+:::caution[แทนที่ค่า placeholder]
+- `xCUSTOMER_ASNx` — ASN สาธารณะของคุณที่ลงทะเบียนกับ ARIN (หรือ
+  RIR ที่เทียบเท่า) **จำเป็นต้องมี ASN สาธารณะ** สำหรับ routed DDoS
+  เนื่องจาก Cloud จะประกาศ prefixes ของคุณในระดับสากล
+  ASN ส่วนตัว (64512-65534 / 4200000000-4294967294) จะยอมรับได้เฉพาะ
+  ในกรณีที่ SOC รองรับ private-ASN peering อย่างชัดเจนสำหรับ
+  deployment ของคุณ
+- `xF5_XC_ASNx` — Cloud ASN (ให้โดย SOC)
+- `xBGP_PASSWORDx` — รหัสผ่าน BGP MD5 ที่ตกลงกัน (หรือตรงกับ Console
+  "default secret") อย่าใช้รหัสผ่านนี้ซ้ำสำหรับบริการอื่น
+:::
+
+**BIG-IP-A** (router-id `xBIGIP_A_OUTER_V4x`, neighbors C1-T1 + C2-T1):
+
+```shell title="imish"
+router bgp xCUSTOMER_ASNx
+  no synchronization
+  bgp log-neighbor-changes
+  no auto-summary
+  bgp router-id xBIGIP_A_OUTER_V4x
+  bgp graceful-restart restart-time 120
+  redistribute kernel route-map route-to-cloud-ipv4
+
+  neighbor cloud peer-group
+  neighbor cloud remote-as xF5_XC_ASNx
+  neighbor cloud description cloud-peer-group
+  neighbor cloud password xBGP_PASSWORDx
+  neighbor cloud timers 10 30
+  neighbor cloud soft-reconfiguration inbound
+  neighbor cloud version 4
+  neighbor cloud capability graceful-restart
+  neighbor cloud send-community
+  neighbor cloud ttl-security hops 1
+  neighbor cloud maximum-prefix 10 warning-only
+  neighbor cloud prefix-list deny-all in
+  neighbor cloud prefix-list route-to-cloud-ipv4 out
+
+  neighbor xXC_C1_T1_INNER_V4x peer-group cloud
+  neighbor xXC_C1_T1_INNER_V4x description cloud-c1-t1-v4
+
+  neighbor xXC_C2_T1_INNER_V4x peer-group cloud
+  neighbor xXC_C2_T1_INNER_V4x description cloud-c2-t1-v4
+
+  address-family ipv6
+    redistribute kernel route-map route-to-cloud-ipv6
+    neighbor cloud activate
+    neighbor cloud soft-reconfiguration inbound
+    neighbor cloud capability graceful-restart
+    neighbor cloud prefix-list deny-all6 in
+    neighbor cloud prefix-list route-to-cloud-ipv6 out
+    neighbor xXC_C1_T1_INNER_V6x peer-group cloud
+    neighbor xXC_C1_T1_INNER_V6x description cloud-c1-t1-v6
+    neighbor xXC_C2_T1_INNER_V6x peer-group cloud
+    neighbor xXC_C2_T1_INNER_V6x description cloud-c2-t1-v6
+  exit-address-family
+
+ip prefix-list deny-all deny 0.0.0.0/0 le 32
+ip prefix-list route-to-cloud-ipv4 permit xPROTECTED_PREFIX_V4x
+
+ipv6 prefix-list deny-all6 deny ::/0 le 128
+ipv6 prefix-list route-to-cloud-ipv6 permit xPROTECTED_PREFIX_V6x
+
+ip route xPROTECTED_NET_V4x xPROTECTED_MASK_V4x null0 201
+ipv6 route xPROTECTED_PREFIX_V6x null0 201
+
+route-map route-to-cloud-ipv4 permit 10
+  match ip address prefix-list route-to-cloud-ipv4
+  set origin igp
+
+route-map route-to-cloud-ipv6 permit 10
+  match ipv6 address prefix-list route-to-cloud-ipv6
+  set origin igp
+```
+
+**BIG-IP-B** (router-id `xBIGIP_B_OUTER_V4x`, neighbors C1-T2 + C2-T2):
+
+```shell title="imish"
+router bgp xCUSTOMER_ASNx
+  no synchronization
+  bgp log-neighbor-changes
+  no auto-summary
+  bgp router-id xBIGIP_B_OUTER_V4x
+  bgp graceful-restart restart-time 120
+  redistribute kernel route-map route-to-cloud-ipv4
+
+  neighbor cloud peer-group
+  neighbor cloud remote-as xF5_XC_ASNx
+  neighbor cloud description cloud-peer-group
+  neighbor cloud password xBGP_PASSWORDx
+  neighbor cloud timers 10 30
+  neighbor cloud soft-reconfiguration inbound
+  neighbor cloud version 4
+  neighbor cloud capability graceful-restart
+  neighbor cloud send-community
+  neighbor cloud ttl-security hops 1
+  neighbor cloud maximum-prefix 10 warning-only
+  neighbor cloud prefix-list deny-all in
+  neighbor cloud prefix-list route-to-cloud-ipv4 out
+
+  neighbor xXC_C1_T2_INNER_V4x peer-group cloud
+  neighbor xXC_C1_T2_INNER_V4x description cloud-c1-t2-v4
+
+  neighbor xXC_C2_T2_INNER_V4x peer-group cloud
+  neighbor xXC_C2_T2_INNER_V4x description cloud-c2-t2-v4
+
+  address-family ipv6
+    redistribute kernel route-map route-to-cloud-ipv6
+    neighbor cloud activate
+    neighbor cloud soft-reconfiguration inbound
+    neighbor cloud capability graceful-restart
+    neighbor cloud prefix-list deny-all6 in
+    neighbor cloud prefix-list route-to-cloud-ipv6 out
+    neighbor xXC_C1_T2_INNER_V6x peer-group cloud
+    neighbor xXC_C1_T2_INNER_V6x description cloud-c1-t2-v6
+    neighbor xXC_C2_T2_INNER_V6x peer-group cloud
+    neighbor xXC_C2_T2_INNER_V6x description cloud-c2-t2-v6
+  exit-address-family
+
+ip prefix-list deny-all deny 0.0.0.0/0 le 32
+ip prefix-list route-to-cloud-ipv4 permit xPROTECTED_PREFIX_V4x
+
+ipv6 prefix-list deny-all6 deny ::/0 le 128
+ipv6 prefix-list route-to-cloud-ipv6 permit xPROTECTED_PREFIX_V6x
+
+ip route xPROTECTED_NET_V4x xPROTECTED_MASK_V4x null0 201
+ipv6 route xPROTECTED_PREFIX_V6x null0 201
+
+route-map route-to-cloud-ipv4 permit 10
+  match ip address prefix-list route-to-cloud-ipv4
+  set origin igp
+
+route-map route-to-cloud-ipv6 permit 10
+  match ipv6 address prefix-list route-to-cloud-ipv6
+  set origin igp
+```
+
+**คำอธิบายการตั้งค่า BGP ที่สำคัญ:**
+
+- **`timers 10 30`** — Keepalive ทุก 10 วินาที, hold time 30 วินาที
+  ค่าเริ่มต้น (60 / 180) ช้าเกินไปสำหรับ DDoS mitigation failover
+  ประสานค่า timer กับ SOC เพื่อให้ตรงกันทั้งสองฝั่ง
+- **`ttl-security hops 1`** — เปิดใช้งาน GTSM
+  ([RFC 5082](https://datatracker.ietf.org/doc/html/rfc5082)) เนื่องจาก BGP sessions เป็น single-hop
+  ผ่าน GRE tunnel สิ่งนี้จะป้องกัน remote BGP spoofing โดย
+  กำหนดให้ TTL = 255 บนแพ็กเก็ต BGP ขาเข้า
+- **`maximum-prefix 10 warning-only`** — มาตรการป้องกันแบบ defence-in-depth
+  แม้ว่า inbound prefix-list จะปฏิเสธ routes ทั้งหมด สิ่งนี้จะ
+  สร้างคำเตือนหาก peer ส่ง prefixes อย่างไม่คาดคิด
+- **`redistribute kernel`** — แทรก `null0` static routes เข้าสู่
+  BGP ผ่าน route-map ทางเลือกอื่นคือการใช้คำสั่ง `network`
+  อย่างชัดเจน (เช่น `network xPROTECTED_PREFIX_V4x`) ซึ่งแม่นยำกว่า
+  เพราะมีเฉพาะ prefix ที่ตรงเท่านั้นที่จะถูกประกาศโดยไม่ขึ้นกับ
+  kernel routes อื่น ทั้งสองวิธีใช้ได้ `redistribute kernel` พร้อม
+  route-map ที่เข้มงวดแสดงไว้ที่นี่เพื่อความยืดหยุ่น
+
+:::tip[BFD (Bidirectional Forwarding Detection)]
+หาก BIG-IP เวอร์ชันของคุณรองรับ BFD ผ่าน GRE tunnels ให้เปิดใช้งาน
+เพื่อการตรวจจับความล้มเหลวในระดับต่ำกว่าวินาที:
+
+```shell
+neighbor cloud fall-over bfd
+```
+
+BFD ให้การ convergence ที่เร็วกว่า BGP keepalive timers เพียงอย่างเดียว
+ยืนยันการรองรับ BFD กับ BIG-IP เวอร์ชันของคุณและ SOC ก่อน
+เปิดใช้งาน
+:::
+
+`null0` static routes ที่มี administrative distance สูงกว่า (201)
+จะทำให้แน่ใจว่า prefixes มีอยู่ใน **kernel routing table** เพื่อให้สามารถ
+redistribute ไปยัง Cloud ผ่าน BGP โดยไม่กระทบ
+การ routing ปกติภายใต้สภาวะที่ไม่มีการโจมตี หาก protected prefix
+มีอยู่แล้วใน routing table จากแหล่งอื่นที่มี
+administrative distance ต่ำกว่า `null0` route จะไม่ active และ
+การ redistribution อาจล้มเหลว — ตรวจสอบด้วย `show ip route` หลัง
+กำหนดค่าเสร็จ

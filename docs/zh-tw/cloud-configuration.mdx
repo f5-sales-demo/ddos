@@ -1,0 +1,89 @@
+---
+title: 雲端設定
+description: 在雲端主控台中設定通道、ASN 和路由，以進行路由式 DDoS 緩解。
+sidebar:
+  order: 4
+i18n:
+  sourceHash: 606c77582a14
+  translator: machine
+---
+
+## XC (UI)
+
+使用 Web 介面來設定**雲端**側，參考
+[L3/L4 路由式 DDoS 緩解](https://docs.cloud.f5.com/docs-v2/ddos-and-transit-services/how-tos/network-firewall/l3l4-ddos-mitigation)指南。
+
+### 啟用 DDoS 工作區
+
+在您可以設定通道和 BGP 之前：
+
+1. 聯繫雲端團隊（透過 `sales@example.com`
+   或您的客戶團隊）以：
+    - 為您的租戶啟用 **Routed DDoS Mitigation** 工作區。
+    - 提供：
+        - 您的**公有 IP 網段**（IPv4 為 /24 或更短，IPv6 為 /48 或
+          更短）以及所有權證明（或 LOA）。
+        - 您的 **ASN**（必須由 ARIN 或同等註冊機構核發）。
+        - **IRR** 註冊（RIPE、ARIN、APNIC 等）以及 RPKI 儲存庫中的 **ROA**。
+        - 所需的**乾淨流量回傳方法**（GRE 通道、第 2 層、
+          透過 Equinix 的私有對等互連等）。
+        - 要保護的資料中心位置和路由器。
+        - 路由公告所需的 **AS-Path 前綴附加**。
+        - 任何 **BGP 社群**、路由偏好或 **AS-SET**
+
+1. SOC 將佈建：
+    - 通道
+    - ASN
+    - 受保護的前綴
+    - 路由公告選項
+    - 快速 ACL / 防火牆原則（視需要）
+
+### 通道
+
+1. 登入 [Cloud Console](https://docs.cloud.f5.com/docs-v2/ddos-and-transit-services/how-tos/network-firewall/l3l4-ddos-mitigation) 並
+   從服務選擇器中選取 **Routed DDoS**。
+1. 前往 **Manage > Tunnels > Add Tunnel**，並設定：
+    - **Location Name** 和 **Availability Zone**（預設為 Zone 1）。
+    - **Bandwidth Max in MB**。
+    - **Tunnel Type**：
+        - **GRE Over IPv4**，用於 IPv4 外層通道。
+        - **GRE Over IPv6**，用於 IPv6 外層通道。
+        - **IP Over IP**，用於 IPv4-in-IPv4 封裝。
+        - **IPv6 Over IPv6**，用於 IPv6-in-IPv6 封裝。
+    - **Customer Endpoint IP**：BIG-IP 的外部位址（外層自身
+      IP，當通道穿越公共網際網路時必須為可公開路由的位址）。
+    - 選用：IPv4/IPv6 互連、分段、keepalive（預設全部
+      停用）。
+1. 在 **Tunnel BGP Information** 下：
+    - 選取一個 **ASN object**（您的 ASN）。
+    - 設定 **Customer Peer Secret Override**：Use Default Secret
+     （預設）、BGP Password Override（遮蔽或明文）或
+      No Secret。
+    - 如果與預設值不同，設定 **Holddown Timer** 值（以秒為單位）。
+
+SOC 可能會為您預先建立這些通道物件；您只需在 BIG-IP 上匹配
+**端點 IP** 和 BGP 設定即可。
+
+### ASN 和路由
+
+- **ASN**：-> **Manage > ASNs > Add ASN**。
+    - 輸入您的 ASN 並確認 BGP 已啟用。
+
+- **前綴**：-> **Manage > Prefixes > Add Prefix**。
+    - 輸入每個 IP 前綴並將其與您的 ASN 關聯。
+
+- **路由公告** -> **Manage > Route Advertisement > Add Route Advertisement**。
+    - 輸入前綴，選擇 **Active** 或 **Not Advertised**，以及
+      選用的到期時間。
+
+這些物件控制當服務啟用時，哪些前綴會透過全球
+網路進行公告。
+
+### 網路限制
+
+**Firewall Rules**、**Deny List Rules** 和 **Fast ACLs for Internet
+VIPs** 可讓您：
+
+- 封鎖或允許特定流量。
+- 對濫用來源進行速率限制。
+- 在純粹的容量型清洗之外套用額外的 DDoS 防護。

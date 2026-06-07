@@ -1,0 +1,201 @@
+---
+title: Topología y hojas de trabajo
+description: >-
+  Diagramas de topología de red y hojas de trabajo de direccionamiento IP para
+  la configuración de túneles GRE.
+sidebar:
+  order: 3
+i18n:
+  sourceHash: 6078064a06be
+  translator: machine
+---
+
+## Topología y direcciones
+
+Configuración para el centro de datos **xDC_NAMEx**
+conectándose a los centros de limpieza en la nube.
+
+:::note
+**Estos son valores de ejemplo.** Reemplácelos con valores específicos del cliente y
+proporcionados por el SOC utilizando las tablas anteriores.
+
+Los prefijos protegidos **deben ser enrutables públicamente** (no RFC 1918).
+Las IPs de los endpoints externos del GRE también deben ser enrutables públicamente cuando los túneles
+atraviesan la Internet pública; la conectividad privada (L2, peering
+privado) puede permitir endpoints RFC 1918. Consulte
+[K000147949](https://my.f5.com/manage/s/article/K000147949) para ejemplos utilizando direcciones de documentación
+apropiadas.
+
+Para redundancia, cree **2 túneles por unidad BIG-IP** hacia diferentes
+centros de limpieza geo-localizados (4 túneles en total para un par HA).
+:::
+
+```mermaid
+flowchart LR
+    INET["Internet<br/>Inbound Traffic"]
+
+    subgraph XC["F5 Distributed Cloud"]
+        C1["xCENTER_1x Scrubbing<br/>xXC_C1_OUTER_V4x"]
+        C2["xCENTER_2x Scrubbing<br/>xXC_C2_OUTER_V4x"]
+    end
+
+    subgraph DC["xDC_NAMEx Data Center"]
+        BIGIPA["BIG-IP-A<br/>xBIGIP_A_OUTER_V4x"]
+        BIGIPB["BIG-IP-B<br/>xBIGIP_B_OUTER_V4x"]
+        NET["DDoS-Protected Network<br/>xPROTECTED_PREFIX_V4x<br/>xPROTECTED_PREFIX_V6x<br/><i>Your public IP block</i>"]
+    end
+
+    INET --> C1
+    INET --> C2
+    C1 -- "GRE C1-T1" --> BIGIPA
+    C2 -- "GRE C2-T1" --> BIGIPA
+    C1 -- "GRE C1-T2" --> BIGIPB
+    C2 -- "GRE C2-T2" --> BIGIPB
+    BIGIPA --> NET
+    BIGIPB --> NET
+
+    style NET fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+```
+
+## Hojas de trabajo
+
+Utilice las siguientes hojas de trabajo de XC y BIG-IP como referencia al construir la configuración del túnel.
+
+### XC
+
+**Túnel C1-T1 — Centro 1 a BIG-IP-A:**
+
+- IPs externas del GRE (para endpoints del túnel):
+    - IPv4 SRC: `xXC_C1_OUTER_V4x/24`
+    - IPv4 DST: `xBIGIP_A_OUTER_V4x/24`
+    - IPv6 SRC: `xXC_C1_OUTER_V6x/64`
+    - IPv6 DST: `xBIGIP_A_OUTER_V6x/64`
+
+- IPs internas del GRE (para sesión BGP):
+    - IPv4: `xXC_C1_T1_INNER_V4x/30`
+    - IPv6: `xXC_C1_T1_INNER_V6x/64`
+
+**Túnel C1-T2 — Centro 1 a BIG-IP-B:**
+
+- IPs externas del GRE (para endpoints del túnel):
+    - IPv4 SRC: `xXC_C1_OUTER_V4x/24`
+    - IPv4 DST: `xBIGIP_B_OUTER_V4x/24`
+    - IPv6 SRC: `xXC_C1_OUTER_V6x/64`
+    - IPv6 DST: `xBIGIP_B_OUTER_V6x/64`
+
+- IPs internas del GRE (para sesión BGP):
+    - IPv4: `xXC_C1_T2_INNER_V4x/30`
+    - IPv6: `xXC_C1_T2_INNER_V6x/64`
+
+**Túnel C2-T1 — Centro 2 a BIG-IP-A:**
+
+- IPs externas del GRE (para endpoints del túnel):
+    - IPv4 SRC: `xXC_C2_OUTER_V4x/24`
+    - IPv4 DST: `xBIGIP_A_OUTER_V4x/24`
+    - IPv6 SRC: `xXC_C2_OUTER_V6x/64`
+    - IPv6 DST: `xBIGIP_A_OUTER_V6x/64`
+
+- IPs internas del GRE (para sesión BGP):
+    - IPv4: `xXC_C2_T1_INNER_V4x/30`
+    - IPv6: `xXC_C2_T1_INNER_V6x/64`
+
+**Túnel C2-T2 — Centro 2 a BIG-IP-B:**
+
+- IPs externas del GRE (para endpoints del túnel):
+    - IPv4 SRC: `xXC_C2_OUTER_V4x/24`
+    - IPv4 DST: `xBIGIP_B_OUTER_V4x/24`
+    - IPv6 SRC: `xXC_C2_OUTER_V6x/64`
+    - IPv6 DST: `xBIGIP_B_OUTER_V6x/64`
+
+- IPs internas del GRE (para sesión BGP):
+    - IPv4: `xXC_C2_T2_INNER_V4x/30`
+    - IPv6: `xXC_C2_T2_INNER_V6x/64`
+
+:::note[IPs internas (de tránsito)]
+Las IPs internas como `10.10.10.0/30` utilizan direcciones RFC 1918. Esto es
+correcto porque están encapsuladas dentro del túnel GRE y nunca
+aparecen en la Internet pública. Los prefijos protegidos siempre deben ser
+enrutables públicamente; las IPs de los endpoints externos deben ser enrutables públicamente cuando
+los túneles atraviesan la Internet pública.
+:::
+
+:::note[Enlaces internos IPv6]
+Los enlaces internos IPv6 utilizan prefijos /64 aquí para coincidir con los valores predeterminados
+comunes de la nube. Para enlaces punto a punto, se prefiere /127 según
+[RFC 6164](https://datatracker.ietf.org/doc/html/rfc6164) para evitar el agotamiento de descubrimiento de vecinos. Utilice /127
+si la asignación del túnel del SOC lo permite.
+:::
+
+### BIG-IP
+
+**BIG-IP-A** (IP externa `xBIGIP_A_OUTER_V4x` / `xBIGIP_A_OUTER_V6x`):
+
+- IPs externas del GRE:
+    - IPv4 SRC: `xBIGIP_A_OUTER_V4x/24`
+    - IPv4 DST (Centro 1): `xXC_C1_OUTER_V4x/24`
+    - IPv4 DST (Centro 2): `xXC_C2_OUTER_V4x/24`
+    - IPv6 SRC: `xBIGIP_A_OUTER_V6x/64`
+    - IPv6 DST (Centro 1): `xXC_C1_OUTER_V6x/64`
+    - IPv6 DST (Centro 2): `xXC_C2_OUTER_V6x/64`
+
+- IPs internas del GRE — Túnel C1-T1:
+    - IPv4: `xBIGIP_C1_T1_INNER_V4x/30`
+    - IPv6: `xBIGIP_C1_T1_INNER_V6x/64`
+
+- IPs internas del GRE — Túnel C2-T1:
+    - IPv4: `xBIGIP_C2_T1_INNER_V4x/30`
+    - IPv6: `xBIGIP_C2_T1_INNER_V6x/64`
+
+**BIG-IP-B** (IP externa `xBIGIP_B_OUTER_V4x` / `xBIGIP_B_OUTER_V6x`):
+
+- IPs externas del GRE:
+    - IPv4 SRC: `xBIGIP_B_OUTER_V4x/24`
+    - IPv4 DST (Centro 1): `xXC_C1_OUTER_V4x/24`
+    - IPv4 DST (Centro 2): `xXC_C2_OUTER_V4x/24`
+    - IPv6 SRC: `xBIGIP_B_OUTER_V6x/64`
+    - IPv6 DST (Centro 1): `xXC_C1_OUTER_V6x/64`
+    - IPv6 DST (Centro 2): `xXC_C2_OUTER_V6x/64`
+
+- IPs internas del GRE — Túnel C1-T2:
+    - IPv4: `xBIGIP_C1_T2_INNER_V4x/30`
+    - IPv6: `xBIGIP_C1_T2_INNER_V6x/64`
+
+- IPs internas del GRE — Túnel C2-T2:
+    - IPv4: `xBIGIP_C2_T2_INNER_V4x/30`
+    - IPv6: `xBIGIP_C2_T2_INNER_V6x/64`
+
+- Prefijos protegidos (anunciados a la nube):
+    - IPv4: `xPROTECTED_NET_V4xxPROTECTED_CIDR_V4x`
+    - IPv6: `xPROTECTED_PREFIX_V6x`
+
+### Diagrama de topología detallado
+
+```mermaid
+flowchart LR
+    subgraph XC["F5 Distributed Cloud"]
+        C1["xCENTER_1x<br/>xXC_C1_OUTER_V4x<br/>xXC_C1_OUTER_V6x"]
+        C2["xCENTER_2x<br/>xXC_C2_OUTER_V4x<br/>xXC_C2_OUTER_V6x"]
+    end
+
+    subgraph DC["xDC_NAMEx Data Center"]
+        subgraph BIGIPA["BIG-IP-A<br/>xBIGIP_A_OUTER_V4x<br/>xBIGIP_A_OUTER_V6x"]
+            T1_INNER["C1-T1 Inner<br/>xBIGIP_C1_T1_INNER_V4x<br/>xBIGIP_C1_T1_INNER_V6x"]
+            T2_INNER["C2-T1 Inner<br/>xBIGIP_C2_T1_INNER_V4x<br/>xBIGIP_C2_T1_INNER_V6x"]
+        end
+
+        subgraph BIGIPB["BIG-IP-B<br/>xBIGIP_B_OUTER_V4x<br/>xBIGIP_B_OUTER_V6x"]
+            T3_INNER["C1-T2 Inner<br/>xBIGIP_C1_T2_INNER_V4x<br/>xBIGIP_C1_T2_INNER_V6x"]
+            T4_INNER["C2-T2 Inner<br/>xBIGIP_C2_T2_INNER_V4x<br/>xBIGIP_C2_T2_INNER_V6x"]
+        end
+    end
+
+    C1 == "GRE C1-T1" ==> T1_INNER
+    C2 == "GRE C2-T1" ==> T2_INNER
+    C1 == "GRE C1-T2" ==> T3_INNER
+    C2 == "GRE C2-T2" ==> T4_INNER
+
+    C1 -. "BGP tcp/179<br/>xXC_C1_T1_INNER_V4x → xBIGIP_C1_T1_INNER_V4x" .-> T1_INNER
+    C2 -. "BGP tcp/179<br/>xXC_C2_T1_INNER_V4x → xBIGIP_C2_T1_INNER_V4x" .-> T2_INNER
+    C1 -. "BGP tcp/179<br/>xXC_C1_T2_INNER_V4x → xBIGIP_C1_T2_INNER_V4x" .-> T3_INNER
+    C2 -. "BGP tcp/179<br/>xXC_C2_T2_INNER_V4x → xBIGIP_C2_T2_INNER_V4x" .-> T4_INNER
+```

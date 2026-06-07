@@ -1,0 +1,200 @@
+---
+title: โทโพโลยีและเวิร์กชีต
+description: >-
+  ไดอะแกรมโทโพโลยีเครือข่ายและเวิร์กชีตการกำหนด IP address สำหรับการกำหนดค่า GRE
+  tunnel
+sidebar:
+  order: 3
+i18n:
+  sourceHash: 6078064a06be
+  translator: machine
+---
+
+## โทโพโลยีและที่อยู่
+
+การกำหนดค่าสำหรับดาต้าเซ็นเตอร์ **xDC_NAMEx**
+ที่เชื่อมต่อกับศูนย์ scrubbing บนคลาวด์
+
+:::note
+**ค่าเหล่านี้เป็นตัวอย่างเท่านั้น** ให้แทนที่ด้วยค่าเฉพาะของลูกค้าและ
+ค่าที่ SOC จัดเตรียมให้โดยใช้ตารางด้านบน
+
+Protected prefixes **ต้องสามารถ route ได้แบบสาธารณะ** (ไม่ใช่ RFC 1918)
+IP ของ GRE outer endpoint ต้องสามารถ route ได้แบบสาธารณะเช่นกันเมื่อ tunnel
+ผ่านอินเทอร์เน็ตสาธารณะ การเชื่อมต่อแบบส่วนตัว (L2, private
+peering) อาจอนุญาตให้ใช้ endpoint แบบ RFC 1918 ได้ ดู
+[K000147949](https://my.f5.com/manage/s/article/K000147949) สำหรับตัวอย่างการใช้ที่อยู่เอกสารอ้างอิงที่ถูกต้อง
+
+เพื่อความซ้ำซ้อน ให้สร้าง **tunnel 2 อันต่อ BIG-IP หนึ่งหน่วย** ไปยังศูนย์ scrubbing
+ที่อยู่คนละพื้นที่ทางภูมิศาสตร์ (รวม 4 tunnel สำหรับคู่ HA)
+:::
+
+```mermaid
+flowchart LR
+    INET["Internet<br/>Inbound Traffic"]
+
+    subgraph XC["F5 Distributed Cloud"]
+        C1["xCENTER_1x Scrubbing<br/>xXC_C1_OUTER_V4x"]
+        C2["xCENTER_2x Scrubbing<br/>xXC_C2_OUTER_V4x"]
+    end
+
+    subgraph DC["xDC_NAMEx Data Center"]
+        BIGIPA["BIG-IP-A<br/>xBIGIP_A_OUTER_V4x"]
+        BIGIPB["BIG-IP-B<br/>xBIGIP_B_OUTER_V4x"]
+        NET["DDoS-Protected Network<br/>xPROTECTED_PREFIX_V4x<br/>xPROTECTED_PREFIX_V6x<br/><i>Your public IP block</i>"]
+    end
+
+    INET --> C1
+    INET --> C2
+    C1 -- "GRE C1-T1" --> BIGIPA
+    C2 -- "GRE C2-T1" --> BIGIPA
+    C1 -- "GRE C1-T2" --> BIGIPB
+    C2 -- "GRE C2-T2" --> BIGIPB
+    BIGIPA --> NET
+    BIGIPB --> NET
+
+    style NET fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+```
+
+## เวิร์กชีต
+
+ใช้เวิร์กชีต XC และ BIG-IP ต่อไปนี้เป็นข้อมูลอ้างอิงเมื่อสร้างการกำหนดค่า tunnel
+
+### XC
+
+**Tunnel C1-T1 — Center 1 ไปยัง BIG-IP-A:**
+
+- GRE outer IPs (สำหรับ tunnel endpoints):
+    - IPv4 SRC: `xXC_C1_OUTER_V4x/24`
+    - IPv4 DST: `xBIGIP_A_OUTER_V4x/24`
+    - IPv6 SRC: `xXC_C1_OUTER_V6x/64`
+    - IPv6 DST: `xBIGIP_A_OUTER_V6x/64`
+
+- GRE inner IPs (สำหรับ BGP session):
+    - IPv4: `xXC_C1_T1_INNER_V4x/30`
+    - IPv6: `xXC_C1_T1_INNER_V6x/64`
+
+**Tunnel C1-T2 — Center 1 ไปยัง BIG-IP-B:**
+
+- GRE outer IPs (สำหรับ tunnel endpoints):
+    - IPv4 SRC: `xXC_C1_OUTER_V4x/24`
+    - IPv4 DST: `xBIGIP_B_OUTER_V4x/24`
+    - IPv6 SRC: `xXC_C1_OUTER_V6x/64`
+    - IPv6 DST: `xBIGIP_B_OUTER_V6x/64`
+
+- GRE inner IPs (สำหรับ BGP session):
+    - IPv4: `xXC_C1_T2_INNER_V4x/30`
+    - IPv6: `xXC_C1_T2_INNER_V6x/64`
+
+**Tunnel C2-T1 — Center 2 ไปยัง BIG-IP-A:**
+
+- GRE outer IPs (สำหรับ tunnel endpoints):
+    - IPv4 SRC: `xXC_C2_OUTER_V4x/24`
+    - IPv4 DST: `xBIGIP_A_OUTER_V4x/24`
+    - IPv6 SRC: `xXC_C2_OUTER_V6x/64`
+    - IPv6 DST: `xBIGIP_A_OUTER_V6x/64`
+
+- GRE inner IPs (สำหรับ BGP session):
+    - IPv4: `xXC_C2_T1_INNER_V4x/30`
+    - IPv6: `xXC_C2_T1_INNER_V6x/64`
+
+**Tunnel C2-T2 — Center 2 ไปยัง BIG-IP-B:**
+
+- GRE outer IPs (สำหรับ tunnel endpoints):
+    - IPv4 SRC: `xXC_C2_OUTER_V4x/24`
+    - IPv4 DST: `xBIGIP_B_OUTER_V4x/24`
+    - IPv6 SRC: `xXC_C2_OUTER_V6x/64`
+    - IPv6 DST: `xBIGIP_B_OUTER_V6x/64`
+
+- GRE inner IPs (สำหรับ BGP session):
+    - IPv4: `xXC_C2_T2_INNER_V4x/30`
+    - IPv6: `xXC_C2_T2_INNER_V6x/64`
+
+:::note[IP ภายใน (transit)]
+IP ภายใน เช่น `10.10.10.0/30` ใช้ที่อยู่ RFC 1918 ซึ่งถูกต้อง
+เนื่องจากถูกห่อหุ้ม (encapsulate) อยู่ภายใน GRE tunnel และไม่ปรากฏ
+บนอินเทอร์เน็ตสาธารณะ Protected prefixes ต้องสามารถ route ได้แบบ
+สาธารณะเสมอ IP ของ outer endpoint ต้องสามารถ route ได้แบบสาธารณะ
+เมื่อ tunnel ผ่านอินเทอร์เน็ตสาธารณะ
+:::
+
+:::note[ลิงก์ IPv6 ภายใน]
+ลิงก์ IPv6 ภายในใช้ prefix /64 ในที่นี้เพื่อให้ตรงกับค่าเริ่มต้นทั่วไป
+ของคลาวด์ สำหรับลิงก์แบบ point-to-point แนะนำให้ใช้ /127 ตาม
+[RFC 6164](https://datatracker.ietf.org/doc/html/rfc6164) เพื่อหลีกเลี่ยงปัญหา neighbor-discovery exhaustion ให้ใช้ /127
+หากการกำหนด tunnel ของ SOC รองรับ
+:::
+
+### BIG-IP
+
+**BIG-IP-A** (outer IP `xBIGIP_A_OUTER_V4x` / `xBIGIP_A_OUTER_V6x`):
+
+- GRE outer IPs:
+    - IPv4 SRC: `xBIGIP_A_OUTER_V4x/24`
+    - IPv4 DST (Center 1): `xXC_C1_OUTER_V4x/24`
+    - IPv4 DST (Center 2): `xXC_C2_OUTER_V4x/24`
+    - IPv6 SRC: `xBIGIP_A_OUTER_V6x/64`
+    - IPv6 DST (Center 1): `xXC_C1_OUTER_V6x/64`
+    - IPv6 DST (Center 2): `xXC_C2_OUTER_V6x/64`
+
+- GRE inner IPs — Tunnel C1-T1:
+    - IPv4: `xBIGIP_C1_T1_INNER_V4x/30`
+    - IPv6: `xBIGIP_C1_T1_INNER_V6x/64`
+
+- GRE inner IPs — Tunnel C2-T1:
+    - IPv4: `xBIGIP_C2_T1_INNER_V4x/30`
+    - IPv6: `xBIGIP_C2_T1_INNER_V6x/64`
+
+**BIG-IP-B** (outer IP `xBIGIP_B_OUTER_V4x` / `xBIGIP_B_OUTER_V6x`):
+
+- GRE outer IPs:
+    - IPv4 SRC: `xBIGIP_B_OUTER_V4x/24`
+    - IPv4 DST (Center 1): `xXC_C1_OUTER_V4x/24`
+    - IPv4 DST (Center 2): `xXC_C2_OUTER_V4x/24`
+    - IPv6 SRC: `xBIGIP_B_OUTER_V6x/64`
+    - IPv6 DST (Center 1): `xXC_C1_OUTER_V6x/64`
+    - IPv6 DST (Center 2): `xXC_C2_OUTER_V6x/64`
+
+- GRE inner IPs — Tunnel C1-T2:
+    - IPv4: `xBIGIP_C1_T2_INNER_V4x/30`
+    - IPv6: `xBIGIP_C1_T2_INNER_V6x/64`
+
+- GRE inner IPs — Tunnel C2-T2:
+    - IPv4: `xBIGIP_C2_T2_INNER_V4x/30`
+    - IPv6: `xBIGIP_C2_T2_INNER_V6x/64`
+
+- Protected prefixes (ประกาศไปยังคลาวด์):
+    - IPv4: `xPROTECTED_NET_V4xxPROTECTED_CIDR_V4x`
+    - IPv6: `xPROTECTED_PREFIX_V6x`
+
+### ไดอะแกรมโทโพโลยีโดยละเอียด
+
+```mermaid
+flowchart LR
+    subgraph XC["F5 Distributed Cloud"]
+        C1["xCENTER_1x<br/>xXC_C1_OUTER_V4x<br/>xXC_C1_OUTER_V6x"]
+        C2["xCENTER_2x<br/>xXC_C2_OUTER_V4x<br/>xXC_C2_OUTER_V6x"]
+    end
+
+    subgraph DC["xDC_NAMEx Data Center"]
+        subgraph BIGIPA["BIG-IP-A<br/>xBIGIP_A_OUTER_V4x<br/>xBIGIP_A_OUTER_V6x"]
+            T1_INNER["C1-T1 Inner<br/>xBIGIP_C1_T1_INNER_V4x<br/>xBIGIP_C1_T1_INNER_V6x"]
+            T2_INNER["C2-T1 Inner<br/>xBIGIP_C2_T1_INNER_V4x<br/>xBIGIP_C2_T1_INNER_V6x"]
+        end
+
+        subgraph BIGIPB["BIG-IP-B<br/>xBIGIP_B_OUTER_V4x<br/>xBIGIP_B_OUTER_V6x"]
+            T3_INNER["C1-T2 Inner<br/>xBIGIP_C1_T2_INNER_V4x<br/>xBIGIP_C1_T2_INNER_V6x"]
+            T4_INNER["C2-T2 Inner<br/>xBIGIP_C2_T2_INNER_V4x<br/>xBIGIP_C2_T2_INNER_V6x"]
+        end
+    end
+
+    C1 == "GRE C1-T1" ==> T1_INNER
+    C2 == "GRE C2-T1" ==> T2_INNER
+    C1 == "GRE C1-T2" ==> T3_INNER
+    C2 == "GRE C2-T2" ==> T4_INNER
+
+    C1 -. "BGP tcp/179<br/>xXC_C1_T1_INNER_V4x → xBIGIP_C1_T1_INNER_V4x" .-> T1_INNER
+    C2 -. "BGP tcp/179<br/>xXC_C2_T1_INNER_V4x → xBIGIP_C2_T1_INNER_V4x" .-> T2_INNER
+    C1 -. "BGP tcp/179<br/>xXC_C1_T2_INNER_V4x → xBIGIP_C1_T2_INNER_V4x" .-> T3_INNER
+    C2 -. "BGP tcp/179<br/>xXC_C2_T2_INNER_V4x → xBIGIP_C2_T2_INNER_V4x" .-> T4_INNER
+```

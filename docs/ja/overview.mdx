@@ -1,0 +1,92 @@
+---
+title: 概要
+description: BIG-IP HAペアからCloud DDoSスクラビングセンターへのGREトンネルおよびBGPピアリングの構成に関する紹介。
+sidebar:
+  order: 1
+i18n:
+  sourceHash: 8a2fdcdca9db
+  translator: machine
+---
+
+## Cloud GRE/BGP BIG-IP
+
+- BIG-IP HAペア（カスタマープレミスイクイップメント、CPEとして機能）から、ユニットごとに独立したトンネルを使用して**GREトンネル**および**BGPピアリング**を構成します。
+- **ルーテッドモード**（L3/L4）で**Cloud DDoS Mitigation**スクラビングセンターに接続します。
+
+```mermaid
+flowchart LR
+    INET["Internet<br/>Inbound Traffic"]
+
+    subgraph XC["F5 Distributed Cloud<br/>Global Anycast"]
+        SCRUB["DDoS Scrubbing<br/>L3/L4 Mitigation"]
+        DROP["Attack Traffic<br/>Dropped"]
+    end
+
+    subgraph DC["xDC_NAMEx Data Center"]
+        BIGIP["BIG-IP CPE<br/>(GRE endpoint)"]
+        SERVERS["DDoS-Protected Servers<br/><i>Your public IP block</i>"]
+    end
+
+    INET -->|"all traffic to your<br/>public IPs"| SCRUB
+    SCRUB -->|"clean traffic"| BIGIP
+    SCRUB -.->|"malicious traffic"| DROP
+    BIGIP --> SERVERS
+    SERVERS --> BIGIP
+    BIGIP -.->|"return traffic<br/>via ISP uplink<br/>(asymmetric path)"| INET
+
+    style SERVERS fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+```
+
+## 要件
+
+- テナントに対して有効化されたCloud **L3/L4ルーテッドDDoS Mitigation**サービス（Always OnまたはAlways Available）。
+- 以下を備えたBIG-IP：
+    - LTM（または同等のネットワーキングモジュール）。
+    - **ダイナミックルーティング（BGP）**のライセンスと有効化。
+- ルーテッドモード：保護対象として少なくとも1つの**パブリックにアドバタイズされた/24（またはそれより短い）**プレフィックス（IPv6の最小値は**/48**）。
+    - 保護対象プレフィックスは**パブリックにルーティング可能**（非RFC 1918）である必要があります。トンネルがパブリックインターネットを経由する場合、GREアウターエンドポイントもパブリックにルーティング可能である必要があります。プライベート接続（L2、プライベートピアリング）を使用するデプロイメントでは、RFC 1918のエンドポイントアドレスを使用できます。
+- データセンター/ルーターとCloudスクラビングセンター間の接続性。
+
+## HAアーキテクチャ
+
+BIG-IPは**アクティブ/スタンバイHAペア**としてデプロイされ、各ユニットはすべてのスクラビングセンターに対して独自の独立したGREトンネルおよびBGPセッションを持ちます：
+
+```mermaid
+flowchart LR
+    subgraph F5XC["F5 Distributed Cloud"]
+        C1["xCENTER_1x scrubbing center"]
+        C2["xCENTER_2x scrubbing center"]
+    end
+
+    subgraph DC["xDC_NAMEx Data Center"]
+        direction TB
+        subgraph UNITA["BIG-IP-A (Active)"]
+            A_C1["C1-T1 tunnel<br/>BGP Established"]
+            A_C2["C2-T1 tunnel<br/>BGP Established"]
+        end
+        subgraph UNITB["BIG-IP-B (Standby)"]
+            B_C1["C1-T2 tunnel<br/>Graceful-Restart Ready"]
+            B_C2["C2-T2 tunnel<br/>Graceful-Restart Ready"]
+        end
+        SERVERS["DDoS-Protected Servers"]
+    end
+
+    C1 -- "GRE C1-T1" --> A_C1
+    C2 -- "GRE C2-T1" --> A_C2
+    C1 -- "GRE C1-T2" --> B_C1
+    C2 -- "GRE C2-T2" --> B_C2
+    UNITA --> SERVERS
+    UNITB --> SERVERS
+
+    style SERVERS fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+```
+
+- **独立したトンネルエンドポイント**：各BIG-IPユニットは、独自の非フローティングアウターセルフIP（`traffic-group-local-only`）と独自のGREトンネルセットを持ちます。BIG-IP-Aは`xBIGIP_A_OUTER_V4x`を、BIG-IP-Bは`xBIGIP_B_OUTER_V4x`をトンネルエンドポイントとして使用します。これにより、トンネルソーシングにおけるフローティングIPへの依存を回避します。
+- **独立したBGPセッション**：各ユニットは独自のトンネル上で独自のBGPセッションを実行します。BIG-IP-AはC1-T1およびC2-T1とピアリングし、BIG-IP-BはC1-T2およびC2-T2とピアリングします。フェイルオーバー時にスタンバイユニットのBGPセッションはすでに確立されているため、Cloudは即座にトラフィックをシフトできます。
+- **コンフィグ同期**：トンネル、セルフIP、およびルーティング構成は**config-sync**を介してユニット間で同期されます。`imish` BGP構成はユニットごとであるため、各ユニットは独自のネイバーステートメントを維持します。同期にすべてのtmshオブジェクトが含まれていることを確認してください。
+- **アクティブ/スタンバイBGP動作**：アクティブユニットは通常のBGP属性で保護対象プレフィックスをアドバタイズします。スタンバイユニットは、より長いAS-pathプリペンド付きで同じプレフィックスをアドバタイズするか（優先度を下げる）、フェイルオーバーまでアドバタイズメントを抑制できます。アプローチについてはSOCと調整してください。
+- **フェイルオーバー収束**：`graceful-restart`が有効で独立したトンネルが構成されている場合、新しいアクティブユニットはすでに確立されたBGPセッションを持っています。収束は、新しくアクティブになったユニットのアドバタイズメントへのBGPベストパス選択のシフトに依存します。`run sys failover standby`でテストしてください。
+
+:::note
+上記の独立トンネルHAモデルは、カスタマー側デバイス冗長化の推奨アプローチです。特にAS-pathプリペンド戦略とBGP再収束タイミングについて、本番環境に移行する前にアカウントチームと具体的なフェイルオーバー設計を検証してください。
+:::
