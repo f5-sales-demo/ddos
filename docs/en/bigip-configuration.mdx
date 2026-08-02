@@ -283,6 +283,7 @@ self IP).
 1. Example BGP configuration:
 
 :::caution[Replace placeholder values]
+
 - `xCUSTOMER_ASNx` — your public ASN registered with ARIN (or
   equivalent RIR). A **public ASN is required** for routed DDoS
   because the Cloud will announce your prefixes globally.
@@ -292,6 +293,7 @@ self IP).
 - `xF5_XC_ASNx` — Cloud ASN (provided by the SOC).
 - `xBGP_PASSWORDx` — the agreed BGP MD5 password (or match Console
   "default secret"). Never reuse this password for other services.
+
 :::
 
 **BIG-IP-A** (router-id `xBIGIP_A_OUTER_V4x`, neighbors C1-T1 + C2-T1):
