@@ -22,7 +22,7 @@ F5 XC DDoS protection
 
 ## Documentation
 
-Full documentation is available at **[https://f5-sales-demo.github.io/ddos/](https://f5-sales-demo.github.io/ddos/)**.
+Full documentation is available at __[https://f5-sales-demo.github.io/ddos/](https://f5-sales-demo.github.io/ddos/)__.
 
 ## Contributing
 
