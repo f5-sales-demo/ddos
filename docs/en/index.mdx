@@ -1,11 +1,64 @@
 ---
-title: DDoS
-description: Guide for configuring and managing DDoS protection
-hero:
-  tagline: Configure and manage DDoS protection.
-  image:
-    html: '<img src="/ddos/images/hero.svg" alt="F5 XC DDoS" />'
-sidebar:
-  hidden: true
-  order: 0
+title: DDoS Mitigation Architecture & Demo
+description: Multi-layered L3-L7 DDoS defense, BGP Flowspec route advertisement, and global scrubbing center architecture.
 ---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+**F5 Distributed Cloud DDoS Mitigation** defends enterprise networks and applications against massive volumetric, protocol-based, and complex application-layer distributed denial of service (DDoS) attacks.
+
+## Defense Architecture
+
+```text
++-------------------------------------------------------------------------+
+|                  F5 Distributed Cloud Global Scrubbing                  |
+|                                                                         |
+|  Volumetric DDoS Attack (SYN Flood, UDP Amp, NTP, DNS Amplification)    |
+|        |                                                                |
+|        v                                                                |
+|  +-------------------------------------------------------------------+  |
+|  | Global Anycast Tier: 20+ Tbps Global Ingestion Capacity           |  |
+|  +---------------------------------+---------------------------------+  |
+|                                    |                                    |
+|                                    v                                    |
+|  +-------------------------------------------------------------------+  |
+|  | Hardware Acceleration & BGP Flowspec Real-time Mitigation Filters |  |
+|  +---------------------------------+---------------------------------+  |
+|                                    |                                    |
+|                                    v                                    |
+|  +-------------------------------------------------------------------+  |
+|  | Clean Traffic Forwarding via IPsec / GRE / Direct Connect         |  |
+|  +---------------------------------+---------------------------------+  |
+|                                    |                                    |
+|                                    v                                    |
+|  +-------------------------------------------------------------------+  |
+|  | Customer Protected Prefixes & On-Premises BIG-IP Infrastructure    |  |
+|  +-------------------------------------------------------------------+  |
++-------------------------------------------------------------------------+
+```
+
+## Key Topics
+
+<CardGrid>
+  <Card title="Volumetric Scrubbing" icon="seti:shield">
+    Absorbs multi-terabit volumetric floods before reaching customer edge routers or data centers.
+  </Card>
+  <Card title="BGP Protected Prefixes" icon="puzzle">
+    Advertise and manage protected CIDR blocks across global transit providers.
+  </Card>
+  <Card title="BIG-IP Integration" icon="star">
+    Coordinated defense combining edge cloud scrubbing with on-premises BIG-IP AFM/LTM.
+  </Card>
+  <Card title="Attack Verification" icon="document">
+    Step-by-step attack simulation and real-time telemetry validation.
+  </Card>
+</CardGrid>
+
+## Documentation Roadmap
+
+- **[Architecture & Concepts](/ddos/01-architecture)**: Global scrubbing tiers, BGP routing, and L3-L7 defense mechanics.
+- **[Prerequisites & Setup](/ddos/02-prerequisites)**: Tenant requirements, ASN validation, and route object authorization.
+- **[Deployment Guide](/ddos/03-deploy)**: Provisioning protected prefixes and mitigation policies with Terraform.
+- **[Verification & Testing](/ddos/04-verify)**: Generating attack traffic and monitoring telemetry graphs.
+- **[BIG-IP Configuration](/ddos/06-bigip-configuration)**: Integrating cloud defense with BIG-IP application security.
+- **[Protected Prefixes](/ddos/07-protected-prefixes)**: Configuring BGP Flowspec and route advertisement policies.
