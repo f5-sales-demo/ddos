@@ -33,35 +33,43 @@ non-floating outer self IP (`traffic-group-local-only`):
 
 **BIG-IP-A:**
 
+<div data-xcsh-context="text">
+
 ```shell title="tmsh"
 create net self xc-ddos-v4-self-a \
   vlan external \
   traffic-group traffic-group-local-only \
   allow-service add { icmp:any gre:any } \
-  address xBIGIP_A_OUTER_V4x/24
+  address <XCSH_BIGIP_A_OUTER_V4>/24
 
 create net self xc-ddos-v6-self-a \
   vlan external \
   traffic-group traffic-group-local-only \
   allow-service add { icmp:any gre:any } \
-  address xBIGIP_A_OUTER_V6x/64
+  address <XCSH_BIGIP_A_OUTER_V6>/64
 ```
 
+</div>
+
 **BIG-IP-B:**
+
+<div data-xcsh-context="text">
 
 ```shell title="tmsh"
 create net self xc-ddos-v4-self-b \
   vlan external \
   traffic-group traffic-group-local-only \
   allow-service add { icmp:any gre:any } \
-  address xBIGIP_B_OUTER_V4x/24
+  address <XCSH_BIGIP_B_OUTER_V4>/24
 
 create net self xc-ddos-v6-self-b \
   vlan external \
   traffic-group traffic-group-local-only \
   allow-service add { icmp:any gre:any } \
-  address xBIGIP_B_OUTER_V6x/64
+  address <XCSH_BIGIP_B_OUTER_V6>/64
 ```
+
+</div>
 
 ### GRE tunnels
 
@@ -70,61 +78,77 @@ scrubbing center endpoint. Create **two tunnels per unit** (one to
 each geo-located scrubbing center) for a total of **four logical
 tunnels** across the HA pair:
 
-**Tunnel C1-T1 — BIG-IP-A to xCENTER_1x:**
+**Tunnel C1-T1 — BIG-IP-A to \<XCSH_CENTER_1>:**
+
+<div data-xcsh-context="text">
 
 ```shell title="tmsh"
 create net tunnels tunnel xc-ddos-c1t1-v4 \
-  local-address xBIGIP_A_OUTER_V4x \
+  local-address <XCSH_BIGIP_A_OUTER_V4> \
   profile gre \
-  remote-address xXC_C1_OUTER_V4x
+  remote-address <XCSH_XC_C1_OUTER_V4>
 
 create net tunnels tunnel xc-ddos-c1t1-v6 \
-  local-address xBIGIP_A_OUTER_V6x \
+  local-address <XCSH_BIGIP_A_OUTER_V6> \
   profile gre \
-  remote-address xXC_C1_OUTER_V6x
+  remote-address <XCSH_XC_C1_OUTER_V6>
 ```
 
-**Tunnel C2-T1 — BIG-IP-A to xCENTER_2x:**
+</div>
+
+**Tunnel C2-T1 — BIG-IP-A to \<XCSH_CENTER_2>:**
+
+<div data-xcsh-context="text">
 
 ```shell title="tmsh"
 create net tunnels tunnel xc-ddos-c2t1-v4 \
-  local-address xBIGIP_A_OUTER_V4x \
+  local-address <XCSH_BIGIP_A_OUTER_V4> \
   profile gre \
-  remote-address xXC_C2_OUTER_V4x
+  remote-address <XCSH_XC_C2_OUTER_V4>
 
 create net tunnels tunnel xc-ddos-c2t1-v6 \
-  local-address xBIGIP_A_OUTER_V6x \
+  local-address <XCSH_BIGIP_A_OUTER_V6> \
   profile gre \
-  remote-address xXC_C2_OUTER_V6x
+  remote-address <XCSH_XC_C2_OUTER_V6>
 ```
 
-**Tunnel C1-T2 — BIG-IP-B to xCENTER_1x:**
+</div>
+
+**Tunnel C1-T2 — BIG-IP-B to \<XCSH_CENTER_1>:**
+
+<div data-xcsh-context="text">
 
 ```shell title="tmsh"
 create net tunnels tunnel xc-ddos-c1t2-v4 \
-  local-address xBIGIP_B_OUTER_V4x \
+  local-address <XCSH_BIGIP_B_OUTER_V4> \
   profile gre \
-  remote-address xXC_C1_OUTER_V4x
+  remote-address <XCSH_XC_C1_OUTER_V4>
 
 create net tunnels tunnel xc-ddos-c1t2-v6 \
-  local-address xBIGIP_B_OUTER_V6x \
+  local-address <XCSH_BIGIP_B_OUTER_V6> \
   profile gre \
-  remote-address xXC_C1_OUTER_V6x
+  remote-address <XCSH_XC_C1_OUTER_V6>
 ```
 
-**Tunnel C2-T2 — BIG-IP-B to xCENTER_2x:**
+</div>
+
+**Tunnel C2-T2 — BIG-IP-B to \<XCSH_CENTER_2>:**
+
+<div data-xcsh-context="text">
 
 ```shell title="tmsh"
 create net tunnels tunnel xc-ddos-c2t2-v4 \
-  local-address xBIGIP_B_OUTER_V4x \
+  local-address <XCSH_BIGIP_B_OUTER_V4> \
   profile gre \
-  remote-address xXC_C2_OUTER_V4x
+  remote-address <XCSH_XC_C2_OUTER_V4>
 
 create net tunnels tunnel xc-ddos-c2t2-v6 \
-  local-address xBIGIP_B_OUTER_V6x \
+  local-address <XCSH_BIGIP_B_OUTER_V6> \
   profile gre \
-  remote-address xXC_C2_OUTER_V6x
+  remote-address <XCSH_XC_C2_OUTER_V6>
 ```
+
+</div>
 
 Tunnel names (`xc-ddos-c1t1-v4`, etc.) are arbitrary; use your own
 naming convention.
@@ -162,21 +186,25 @@ knows the outer IP pair can inject traffic into the tunnel. Apply
 ACLs on the upstream router or firewall to restrict inbound GRE to
 only the expected Cloud scrubbing-center source IPs:
 
+<div data-xcsh-context="shell" data-xcsh-fields="XCSH_XC_C1_OUTER_V4 XCSH_XC_C2_OUTER_V4 XCSH_BIGIP_A_OUTER_V4 XCSH_BIGIP_B_OUTER_V4">
+
 ```shell title="Cisco IOS"
 ! Example upstream router ACL (Cisco IOS style)
 ip access-list extended ALLOW-XC-GRE
-  permit gre host xXC_C1_OUTER_V4x host xBIGIP_A_OUTER_V4x
-  permit gre host xXC_C2_OUTER_V4x host xBIGIP_A_OUTER_V4x
-  permit gre host xXC_C1_OUTER_V4x host xBIGIP_B_OUTER_V4x
-  permit gre host xXC_C2_OUTER_V4x host xBIGIP_B_OUTER_V4x
-  deny   gre any host xBIGIP_A_OUTER_V4x log
-  deny   gre any host xBIGIP_B_OUTER_V4x log
+  permit gre host <XCSH_XC_C1_OUTER_V4> host <XCSH_BIGIP_A_OUTER_V4>
+  permit gre host <XCSH_XC_C2_OUTER_V4> host <XCSH_BIGIP_A_OUTER_V4>
+  permit gre host <XCSH_XC_C1_OUTER_V4> host <XCSH_BIGIP_B_OUTER_V4>
+  permit gre host <XCSH_XC_C2_OUTER_V4> host <XCSH_BIGIP_B_OUTER_V4>
+  deny   gre any host <XCSH_BIGIP_A_OUTER_V4> log
+  deny   gre any host <XCSH_BIGIP_B_OUTER_V4> log
 ```
+
+</div>
 
 :::note
 Adapt the syntax for your router platform. The same principle
 applies to IPv6 ACLs for the IPv6 GRE tunnels. Both BIG-IP-A
-(`xBIGIP_A_OUTER_V4x`) and BIG-IP-B (`xBIGIP_B_OUTER_V4x`)
+(`<XCSH_BIGIP_A_OUTER_V4>`) and BIG-IP-B (`<XCSH_BIGIP_B_OUTER_V4>`)
 outer IPs must be permitted as GRE destinations.
 :::
 
@@ -188,69 +216,85 @@ include `tcp:179` (BGP) for the peering session to establish. Adding
 `icmp:any` on the inner self IPs enables PMTUD and reachability
 testing through the tunnel:
 
-**Tunnel C1-T1 — BIG-IP-A to xCENTER_1x:**
+**Tunnel C1-T1 — BIG-IP-A to \<XCSH_CENTER_1>:**
+
+<div data-xcsh-context="text">
 
 ```shell title="tmsh"
 create net self xc-ddos-c1t1-inner-v4 \
   vlan xc-ddos-c1t1-v4 \
   traffic-group traffic-group-local-only \
   allow-service add { tcp:179 icmp:any } \
-  address xBIGIP_C1_T1_INNER_V4x/30
+  address <XCSH_BIGIP_C1_T1_INNER_V4>/30
 
 create net self xc-ddos-c1t1-inner-v6 \
   vlan xc-ddos-c1t1-v6 \
   traffic-group traffic-group-local-only \
   allow-service add { tcp:179 icmp:any } \
-  address xBIGIP_C1_T1_INNER_V6x/64
+  address <XCSH_BIGIP_C1_T1_INNER_V6>/64
 ```
 
-**Tunnel C2-T1 — BIG-IP-A to xCENTER_2x:**
+</div>
+
+**Tunnel C2-T1 — BIG-IP-A to \<XCSH_CENTER_2>:**
+
+<div data-xcsh-context="text">
 
 ```shell title="tmsh"
 create net self xc-ddos-c2t1-inner-v4 \
   vlan xc-ddos-c2t1-v4 \
   traffic-group traffic-group-local-only \
   allow-service add { tcp:179 icmp:any } \
-  address xBIGIP_C2_T1_INNER_V4x/30
+  address <XCSH_BIGIP_C2_T1_INNER_V4>/30
 
 create net self xc-ddos-c2t1-inner-v6 \
   vlan xc-ddos-c2t1-v6 \
   traffic-group traffic-group-local-only \
   allow-service add { tcp:179 icmp:any } \
-  address xBIGIP_C2_T1_INNER_V6x/64
+  address <XCSH_BIGIP_C2_T1_INNER_V6>/64
 ```
 
-**Tunnel C1-T2 — BIG-IP-B to xCENTER_1x:**
+</div>
+
+**Tunnel C1-T2 — BIG-IP-B to \<XCSH_CENTER_1>:**
+
+<div data-xcsh-context="text">
 
 ```shell title="tmsh"
 create net self xc-ddos-c1t2-inner-v4 \
   vlan xc-ddos-c1t2-v4 \
   traffic-group traffic-group-local-only \
   allow-service add { tcp:179 icmp:any } \
-  address xBIGIP_C1_T2_INNER_V4x/30
+  address <XCSH_BIGIP_C1_T2_INNER_V4>/30
 
 create net self xc-ddos-c1t2-inner-v6 \
   vlan xc-ddos-c1t2-v6 \
   traffic-group traffic-group-local-only \
   allow-service add { tcp:179 icmp:any } \
-  address xBIGIP_C1_T2_INNER_V6x/64
+  address <XCSH_BIGIP_C1_T2_INNER_V6>/64
 ```
 
-**Tunnel C2-T2 — BIG-IP-B to xCENTER_2x:**
+</div>
+
+**Tunnel C2-T2 — BIG-IP-B to \<XCSH_CENTER_2>:**
+
+<div data-xcsh-context="text">
 
 ```shell title="tmsh"
 create net self xc-ddos-c2t2-inner-v4 \
   vlan xc-ddos-c2t2-v4 \
   traffic-group traffic-group-local-only \
   allow-service add { tcp:179 icmp:any } \
-  address xBIGIP_C2_T2_INNER_V4x/30
+  address <XCSH_BIGIP_C2_T2_INNER_V4>/30
 
 create net self xc-ddos-c2t2-inner-v6 \
   vlan xc-ddos-c2t2-v6 \
   traffic-group traffic-group-local-only \
   allow-service add { tcp:179 icmp:any } \
-  address xBIGIP_C2_T2_INNER_V6x/64
+  address <XCSH_BIGIP_C2_T2_INNER_V6>/64
 ```
+
+</div>
 
 ### BGP
 
@@ -284,33 +328,35 @@ self IP).
 
 :::caution[Replace placeholder values]
 
-- `xCUSTOMER_ASNx` — your public ASN registered with ARIN (or
+- `<XCSH_CUSTOMER_ASN>` — your public ASN registered with ARIN (or
   equivalent RIR). A **public ASN is required** for routed DDoS
   because the Cloud will announce your prefixes globally.
   A private ASN (64512-65534 / 4200000000-4294967294) is only
   acceptable if SOC explicitly supports private-ASN peering for
   your deployment.
-- `xF5_XC_ASNx` — Cloud ASN (provided by the SOC).
-- `xBGP_PASSWORDx` — the agreed BGP MD5 password (or match Console
+- `<XCSH_F5_XC_ASN>` — Cloud ASN (provided by the SOC).
+- `<XCSH_BGP_PASSWORD>` — the agreed BGP MD5 password (or match Console
   "default secret"). Never reuse this password for other services.
 
 :::
 
-**BIG-IP-A** (router-id `xBIGIP_A_OUTER_V4x`, neighbors C1-T1 + C2-T1):
+**BIG-IP-A** (router-id `<XCSH_BIGIP_A_OUTER_V4>`, neighbors C1-T1 + C2-T1):
+
+<div data-xcsh-context="text">
 
 ```shell title="imish"
-router bgp xCUSTOMER_ASNx
+router bgp <XCSH_CUSTOMER_ASN>
   no synchronization
   bgp log-neighbor-changes
   no auto-summary
-  bgp router-id xBIGIP_A_OUTER_V4x
+  bgp router-id <XCSH_BIGIP_A_OUTER_V4>
   bgp graceful-restart restart-time 120
   redistribute kernel route-map route-to-cloud-ipv4
 
   neighbor cloud peer-group
-  neighbor cloud remote-as xF5_XC_ASNx
+  neighbor cloud remote-as <XCSH_F5_XC_ASN>
   neighbor cloud description cloud-peer-group
-  neighbor cloud password xBGP_PASSWORDx
+  neighbor cloud password <XCSH_BGP_PASSWORD>
   neighbor cloud timers 10 30
   neighbor cloud soft-reconfiguration inbound
   neighbor cloud version 4
@@ -321,11 +367,11 @@ router bgp xCUSTOMER_ASNx
   neighbor cloud prefix-list deny-all in
   neighbor cloud prefix-list route-to-cloud-ipv4 out
 
-  neighbor xXC_C1_T1_INNER_V4x peer-group cloud
-  neighbor xXC_C1_T1_INNER_V4x description cloud-c1-t1-v4
+  neighbor <XCSH_XC_C1_T1_INNER_V4> peer-group cloud
+  neighbor <XCSH_XC_C1_T1_INNER_V4> description cloud-c1-t1-v4
 
-  neighbor xXC_C2_T1_INNER_V4x peer-group cloud
-  neighbor xXC_C2_T1_INNER_V4x description cloud-c2-t1-v4
+  neighbor <XCSH_XC_C2_T1_INNER_V4> peer-group cloud
+  neighbor <XCSH_XC_C2_T1_INNER_V4> description cloud-c2-t1-v4
 
   address-family ipv6
     redistribute kernel route-map route-to-cloud-ipv6
@@ -334,20 +380,20 @@ router bgp xCUSTOMER_ASNx
     neighbor cloud capability graceful-restart
     neighbor cloud prefix-list deny-all6 in
     neighbor cloud prefix-list route-to-cloud-ipv6 out
-    neighbor xXC_C1_T1_INNER_V6x peer-group cloud
-    neighbor xXC_C1_T1_INNER_V6x description cloud-c1-t1-v6
-    neighbor xXC_C2_T1_INNER_V6x peer-group cloud
-    neighbor xXC_C2_T1_INNER_V6x description cloud-c2-t1-v6
+    neighbor <XCSH_XC_C1_T1_INNER_V6> peer-group cloud
+    neighbor <XCSH_XC_C1_T1_INNER_V6> description cloud-c1-t1-v6
+    neighbor <XCSH_XC_C2_T1_INNER_V6> peer-group cloud
+    neighbor <XCSH_XC_C2_T1_INNER_V6> description cloud-c2-t1-v6
   exit-address-family
 
 ip prefix-list deny-all deny 0.0.0.0/0 le 32
-ip prefix-list route-to-cloud-ipv4 permit xPROTECTED_PREFIX_V4x
+ip prefix-list route-to-cloud-ipv4 permit <XCSH_PROTECTED_PREFIX_V4>
 
 ipv6 prefix-list deny-all6 deny ::/0 le 128
-ipv6 prefix-list route-to-cloud-ipv6 permit xPROTECTED_PREFIX_V6x
+ipv6 prefix-list route-to-cloud-ipv6 permit <XCSH_PROTECTED_PREFIX_V6>
 
-ip route xPROTECTED_NET_V4x xPROTECTED_MASK_V4x null0 201
-ipv6 route xPROTECTED_PREFIX_V6x null0 201
+ip route <XCSH_PROTECTED_NET_V4> <XCSH_PROTECTED_MASK_V4> null0 201
+ipv6 route <XCSH_PROTECTED_PREFIX_V6> null0 201
 
 route-map route-to-cloud-ipv4 permit 10
   match ip address prefix-list route-to-cloud-ipv4
@@ -358,21 +404,25 @@ route-map route-to-cloud-ipv6 permit 10
   set origin igp
 ```
 
-**BIG-IP-B** (router-id `xBIGIP_B_OUTER_V4x`, neighbors C1-T2 + C2-T2):
+</div>
+
+**BIG-IP-B** (router-id `<XCSH_BIGIP_B_OUTER_V4>`, neighbors C1-T2 + C2-T2):
+
+<div data-xcsh-context="text">
 
 ```shell title="imish"
-router bgp xCUSTOMER_ASNx
+router bgp <XCSH_CUSTOMER_ASN>
   no synchronization
   bgp log-neighbor-changes
   no auto-summary
-  bgp router-id xBIGIP_B_OUTER_V4x
+  bgp router-id <XCSH_BIGIP_B_OUTER_V4>
   bgp graceful-restart restart-time 120
   redistribute kernel route-map route-to-cloud-ipv4
 
   neighbor cloud peer-group
-  neighbor cloud remote-as xF5_XC_ASNx
+  neighbor cloud remote-as <XCSH_F5_XC_ASN>
   neighbor cloud description cloud-peer-group
-  neighbor cloud password xBGP_PASSWORDx
+  neighbor cloud password <XCSH_BGP_PASSWORD>
   neighbor cloud timers 10 30
   neighbor cloud soft-reconfiguration inbound
   neighbor cloud version 4
@@ -383,11 +433,11 @@ router bgp xCUSTOMER_ASNx
   neighbor cloud prefix-list deny-all in
   neighbor cloud prefix-list route-to-cloud-ipv4 out
 
-  neighbor xXC_C1_T2_INNER_V4x peer-group cloud
-  neighbor xXC_C1_T2_INNER_V4x description cloud-c1-t2-v4
+  neighbor <XCSH_XC_C1_T2_INNER_V4> peer-group cloud
+  neighbor <XCSH_XC_C1_T2_INNER_V4> description cloud-c1-t2-v4
 
-  neighbor xXC_C2_T2_INNER_V4x peer-group cloud
-  neighbor xXC_C2_T2_INNER_V4x description cloud-c2-t2-v4
+  neighbor <XCSH_XC_C2_T2_INNER_V4> peer-group cloud
+  neighbor <XCSH_XC_C2_T2_INNER_V4> description cloud-c2-t2-v4
 
   address-family ipv6
     redistribute kernel route-map route-to-cloud-ipv6
@@ -396,20 +446,20 @@ router bgp xCUSTOMER_ASNx
     neighbor cloud capability graceful-restart
     neighbor cloud prefix-list deny-all6 in
     neighbor cloud prefix-list route-to-cloud-ipv6 out
-    neighbor xXC_C1_T2_INNER_V6x peer-group cloud
-    neighbor xXC_C1_T2_INNER_V6x description cloud-c1-t2-v6
-    neighbor xXC_C2_T2_INNER_V6x peer-group cloud
-    neighbor xXC_C2_T2_INNER_V6x description cloud-c2-t2-v6
+    neighbor <XCSH_XC_C1_T2_INNER_V6> peer-group cloud
+    neighbor <XCSH_XC_C1_T2_INNER_V6> description cloud-c1-t2-v6
+    neighbor <XCSH_XC_C2_T2_INNER_V6> peer-group cloud
+    neighbor <XCSH_XC_C2_T2_INNER_V6> description cloud-c2-t2-v6
   exit-address-family
 
 ip prefix-list deny-all deny 0.0.0.0/0 le 32
-ip prefix-list route-to-cloud-ipv4 permit xPROTECTED_PREFIX_V4x
+ip prefix-list route-to-cloud-ipv4 permit <XCSH_PROTECTED_PREFIX_V4>
 
 ipv6 prefix-list deny-all6 deny ::/0 le 128
-ipv6 prefix-list route-to-cloud-ipv6 permit xPROTECTED_PREFIX_V6x
+ipv6 prefix-list route-to-cloud-ipv6 permit <XCSH_PROTECTED_PREFIX_V6>
 
-ip route xPROTECTED_NET_V4x xPROTECTED_MASK_V4x null0 201
-ipv6 route xPROTECTED_PREFIX_V6x null0 201
+ip route <XCSH_PROTECTED_NET_V4> <XCSH_PROTECTED_MASK_V4> null0 201
+ipv6 route <XCSH_PROTECTED_PREFIX_V6> null0 201
 
 route-map route-to-cloud-ipv4 permit 10
   match ip address prefix-list route-to-cloud-ipv4
@@ -419,6 +469,8 @@ route-map route-to-cloud-ipv6 permit 10
   match ipv6 address prefix-list route-to-cloud-ipv6
   set origin igp
 ```
+
+</div>
 
 **Key BGP settings explained:**
 
@@ -434,7 +486,7 @@ route-map route-to-cloud-ipv6 permit 10
   generates a warning if the peer unexpectedly sends prefixes.
 - **`redistribute kernel`** — Injects the `null0` static routes into
   BGP via the route-map. An alternative is to use explicit `network`
-  statements (e.g. `network xPROTECTED_PREFIX_V4x`), which are more precise
+  statements (e.g. `network <XCSH_PROTECTED_PREFIX_V4>`), which are more precise
   because only the exact prefix is advertised regardless of other
   kernel routes. Either approach works; `redistribute kernel` with a
   strict route-map is shown here for flexibility.
