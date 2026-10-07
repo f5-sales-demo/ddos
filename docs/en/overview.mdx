@@ -22,7 +22,7 @@ flowchart LR
         DROP["Attack Traffic<br/>Dropped"]
     end
 
-    subgraph DC["xDC_NAMEx Data Center"]
+    subgraph DC["<XCSH_DC_NAME> Data Center"]
         BIGIP["BIG-IP CPE<br/>(GRE endpoint)"]
         SERVERS["DDoS-Protected Servers<br/><i>Your public IP block</i>"]
     end
@@ -42,11 +42,11 @@ flowchart LR
 - Cloud **L3/L4 Routed DDoS Mitigation** service
   (Always On or Always Available) enabled for your tenant.
 - BIG-IP with:
-    - LTM (or equivalent networking modules).
-    - **Dynamic routing (BGP)** licensed and enabled.
+  - LTM (or equivalent networking modules).
+  - **Dynamic routing (BGP)** licensed and enabled.
 - Routed mode: at least one **publicly advertised /24 (or shorter)**
   prefix for protection (IPv6 minimum is **/48**).
-    - Protected prefixes **must be publicly routable** (non-RFC 1918).
+  - Protected prefixes **must be publicly routable** (non-RFC 1918).
      GRE outer endpoints must also be publicly routable when tunnels
      traverse the public Internet; deployments using private
      connectivity (L2, private peering) may use RFC 1918 endpoint
@@ -63,11 +63,11 @@ scrubbing center:
 ```mermaid
 flowchart LR
     subgraph F5XC["F5 Distributed Cloud"]
-        C1["xCENTER_1x scrubbing center"]
-        C2["xCENTER_2x scrubbing center"]
+        C1["<XCSH_CENTER_1> scrubbing center"]
+        C2["<XCSH_CENTER_2> scrubbing center"]
     end
 
-    subgraph DC["xDC_NAMEx Data Center"]
+    subgraph DC["<XCSH_DC_NAME> Data Center"]
         direction TB
         subgraph UNITA["BIG-IP-A (Active)"]
             A_C1["C1-T1 tunnel<br/>BGP Established"]
@@ -92,8 +92,8 @@ flowchart LR
 
 - **Independent tunnel endpoints**: Each BIG-IP unit has its own
   non-floating outer self IP (`traffic-group-local-only`) and its
-  own set of GRE tunnels. BIG-IP-A uses `xBIGIP_A_OUTER_V4x` and
-  BIG-IP-B uses `xBIGIP_B_OUTER_V4x` as tunnel endpoints. This avoids
+  own set of GRE tunnels. BIG-IP-A uses `<XCSH_BIGIP_A_OUTER_V4>` and
+  BIG-IP-B uses `<XCSH_BIGIP_B_OUTER_V4>` as tunnel endpoints. This avoids
   dependence on a floating IP for tunnel sourcing.
 - **Independent BGP sessions**: Each unit runs its own BGP sessions
   over its own tunnels. BIG-IP-A peers with C1-T1 and C2-T1;
